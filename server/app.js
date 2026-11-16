@@ -1,36 +1,65 @@
 import express from "express";
 import cors from "cors";
-import {config} from "dotenv";
+import { config } from "dotenv";
 import cookieParser from "cookie-parser";
 import { errorMiddleware } from "./middlewares/error.js";
 import authRouter from "./router/userRoutes.js";
+import adminRouter from "./router/adminRoutes.js";
+import studentRouter from "./router/studentRoutes.js";
+import notificationRouter from "./router/notificationRoutes.js";
+import projectRouter from "./router/projectRoutes.js";
+import deadlineRouter from "./router/deadlineRoutes.js";
+import teacherRouter from "./router/teacherRoutes.js";
+import { fileURLToPath } from "url";
+import path from "path";
+import fs from "fs";
 
 config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 
 /// ye connection banata hai frontend and backend ke beech
-/// origin: [process.env.FRONTEND_URL] -> ye frontend ka url hai 
-/// methods:["GET","POST","PUT","DELETE"] -> ye methods hai 
-/// credentials:true -> ye credentials hai 
-/// ye middleware hai 
+/// origin: [process.env.FRONTEND_URL] -> ye frontend ka url hai
+/// methods:["GET","POST","PUT","DELETE"] -> ye methods hai
+/// credentials:true -> ye credentials hai
+/// ye middleware hai
 app.use(
-    cors(
-    {
-        origin: [process.env.FRONTEND_URL],
-        methods:["GET","POST","PUT","DELETE"],
-        credentials:true
-    }
-));
+  cors({
+    origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",") : [],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  }),
+);
 
-/// express.json() -> ye frontend se aane wale data ko parse karta hai 
-/// express.urlencoded({extended:true}) -> ye frontend se aane wale data ko parse karta hai  // form data ko parse karta hai 
-/// cookieParser() -> ye frontend se aane wale cookies ko parse karta hai 
+const uploadsDir = path.join(__dirname, "uploads");
+const tempDir = path.join(__dirname, "temp");
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
+/// express.json() -> ye frontend se aane wale data ko parse karta hai
+/// express.urlencoded({extended:true}) -> ye frontend se aane wale data ko parse karta hai  // form data ko parse karta hai
+/// cookieParser() -> ye frontend se aane wale cookies ko parse karta hai
 app.use(express.json());
-app.use(express.urlencoded({extended:true}));
-app.use(cookieParser()); 
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-app.use("/api/v1/auth",authRouter);
-/// sabse last me error middleware ko use karna hai 
+app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/student", studentRouter);
+app.use("/api/v1/notification", notificationRouter);
+app.use("/api/v1/project", projectRouter);
+app.use("/api/v1/deadline", deadlineRouter);
+app.use("/api/v1/teacher", teacherRouter);
+
+/// sabse last me error middleware ko use karna hai
 app.use(errorMiddleware);
 
 export default app;

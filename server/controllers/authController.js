@@ -89,9 +89,15 @@ export const resetPassword = asyncHandler(async (req,res,next) => {
     if(!user){
         return next(new ErrorHandler("Invalid token",400));
     }
-    if( !req.body.password !== !req.body.confirmPassword){
+    //fix
+    // if( !req.body.password !== !req.body.confirmPassword){
+    //     return next(new ErrorHandler("Password and Confirm Password is not matched",400));
+    // }
+
+    if( req.body.password !== req.body.confirmPassword){
         return next(new ErrorHandler("Password and Confirm Password is not matched",400));
     }
+
     user.password = req.body.password;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;

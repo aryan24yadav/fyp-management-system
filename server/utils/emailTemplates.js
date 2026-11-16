@@ -1,16 +1,16 @@
-export function generateForgotPasswordEmailTemplate(userName, resetLink){
-    return `
+export function generateForgotPasswordEmailTemplate(userName, resetLink) {
+  return `
     <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 40px 0;">
         <div style="max-width: 500px; background: #ffffff; margin: auto; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-            
+
             <h2 style="color: #333; text-align: center;">🔐 Reset Your Password</h2>
-            
+
             <p style="color: #555; font-size: 15px;">
                 We received a request to reset your password. Click the button below to set a new password.
             </p>
 
             <div style="text-align: center; margin: 30px 0;">
-                <a href="${resetLink}" 
+                <a href="${resetLink}"
                    style="background-color: #4CAF50; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">
                    Reset Password
                 </a>
@@ -39,13 +39,13 @@ export function generateForgotPasswordEmailTemplate(userName, resetLink){
     `;
 }
 
-export function generateResetPasswordEmailTemplate(userName){
-    return `
+export function generateResetPasswordEmailTemplate(userName) {
+  return `
     <div style="font-family: Arial, sans-serif; background-color: #eef2f7; padding: 40px 0;">
         <div style="max-width: 500px; background: #ffffff; margin: auto; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-            
+
             <h2 style="color: #2c3e50; text-align: center;">✅ Password Updated Successfully</h2>
-            
+
             <p style="color: #555; font-size: 15px;">
                 Hi ${userName || "User"},
             </p>
@@ -55,7 +55,7 @@ export function generateResetPasswordEmailTemplate(userName){
             </p>
 
             <div style="text-align: center; margin: 30px 0;">
-                <a href="http://localhost:3000/login" 
+                <a href="http://localhost:3000/login"
                    style="background-color: #3498db; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">
                    Login Now
                 </a>
@@ -78,4 +78,30 @@ export function generateResetPasswordEmailTemplate(userName){
         </div>
     </div>
     `;
+}
+
+/**
+ * Request Accepted Email
+ */
+export function generateRequestAcceptedTemplate(supervisorName) {
+  return `
+    <div style="font-family: Arial; padding:20px; background:#fff; border:1px solid #ddd; border-radius:8px;">
+      <h2 style="color:#10b981;">✅ Supervisor Request Accepted</h2>
+      <p>Your supervisor request has been accepted by <strong>${supervisorName}</strong>.</p>
+      <p>You can now start working on your project and upload files.</p>
+    </div>
+  `;
+}
+
+/**
+ * Request Rejected Email
+ */
+export function generateRequestRejectedTemplate(supervisorName) {
+  return `
+    <div style="font-family: Arial; padding:20px; background:#fff; border:1px solid #ddd; border-radius:8px;">
+      <h2 style="color:#ef4444;">❌ Supervisor Request Rejected</h2>
+      <p>Your supervisor request has been rejected by <strong>${supervisorName}</strong>.</p>
+      <p>You can try requesting another supervisor.</p>
+    </div>
+  `;
 }
