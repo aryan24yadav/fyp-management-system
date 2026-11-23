@@ -1,32 +1,40 @@
 import { X } from "lucide-react";
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { createTeacher } from "../../store/slices/adminSlice.js";
 import { toggleCreateTeacherModal } from "../../store/slices/popupSlice.js";
+import { DEPARTMENTS } from "../../lib/constants.js";
+
+// department/experties used to start as "" while the <select> displayed
+// "Computer Science", so submitting without touching them failed with
+// "All fields are required".
+const initialForm = {
+  name: "",
+  email: "",
+  department: DEPARTMENTS[0],
+  password: "",
+  experties: "",
+  maxStudents: 1,
+};
 
 const AddTeacher = () => {
   const dispatch = useDispatch();
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    department: "",
-    password: "",
-    experties: "",
-    maxStudents: 1,
-  });
+  const [formData, setFormData] = useState(initialForm);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleCreateTeacher = (e) => {
+  const close = () => dispatch(toggleCreateTeacherModal());
+
+  const handleCreateTeacher = async (e) => {
     e.preventDefault();
-    dispatch(createTeacher(formData));
-    setFormData({
-      name: "",
-      email: "",
-      department: "",
-      password: "",
-      experties: "",
-      maxStudents: 1,
-    });
-    dispatch(toggleCreateTeacherModal());
+    setIsSaving(true);
+    const result = await dispatch(
+      createTeacher({ ...formData, maxStudents: Number(formData.maxStudents) }),
+    );
+    setIsSaving(false);
+    if (createTeacher.fulfilled.match(result)) {
+      setFormData(initialForm);
+      close();
+    }
   };
 
   return (
@@ -38,8 +46,8 @@ const AddTeacher = () => {
               Add Teacher
             </h3>
             <button
-              onClick={() => dispatch(toggleCreateTeacherModal())}
-              className="text-slate-400 hover:to-slate-600"
+              onClick={close}
+              className="text-slate-400 hover:text-slate-600"
             >
               <X className="w-6 h-6" />
             </button>
@@ -56,8 +64,9 @@ const AddTeacher = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
+                maxLength={30}
                 required
-                className="input-field w-full py-1 border-b border-slate-600 focus:outline-none"
+                className="input-field w-full"
               />
             </div>
 
@@ -72,7 +81,7 @@ const AddTeacher = () => {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 required
-                className="input-field w-full py-1 border-b border-slate-600 focus:outline-none"
+                className="input-field w-full"
               />
             </div>
 
@@ -86,9 +95,11 @@ const AddTeacher = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
+                minLength={8}
                 required
-                className="input-field w-full py-1 border-b border-slate-600 focus:outline-none"
+                className="input-field w-full"
               />
+              <p className="text-xs text-slate-500 mt-1">At least 8 characters</p>
             </div>
 
             <div>
@@ -101,31 +112,30 @@ const AddTeacher = () => {
                   setFormData({ ...formData, department: e.target.value })
                 }
                 required
-                className="input-field w-full py-1 border-b border-slate-600 focus:outline-none"
+                className="input-field w-full"
               >
-                <option value="Computer Science">Computer Science</option>
-                <option value="Electronics">Electronics</option>
-                <option value="Mechanical">Mechanical</option>
-                <option value="IT">IT</option>
+                {DEPARTMENTS.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Experties
+                Expertise (comma separated)
               </label>
-              <select
+              <input
+                type="text"
                 value={formData.experties}
                 onChange={(e) =>
                   setFormData({ ...formData, experties: e.target.value })
                 }
+                placeholder="e.g. Machine Learning, Web Development"
                 required
-              >
-                <option value="Computer Science">Computer Science</option>
-                <option value="Electronics">Electronics</option>
-                <option value="Mechanical">Mechanical</option>
-                <option value="IT">IT</option>
-              </select>
+                className="input-field w-full"
+              />
             </div>
 
             <div>
@@ -134,27 +144,27 @@ const AddTeacher = () => {
               </label>
               <input
                 type="number"
-                max={10}
+                max={50}
                 min={1}
                 value={formData.maxStudents}
                 onChange={(e) =>
                   setFormData({ ...formData, maxStudents: e.target.value })
                 }
                 required
-                className="input-field w-full py-1 border-b border-slate-600 focus:outline-none"
+                className="input-field w-full"
               />
             </div>
 
             <div className="flex justify-end space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={() => dispatch(toggleCreateTeacherModal())}
-                className="btn-danger"
-              >
+              <button type="button" onClick={close} className="btn-danger">
                 Cancel
               </button>
-              <button type="submit" className="btn-primary">
-                Add Teacher
+              <button
+                type="submit"
+                className="btn-primary disabled:opacity-50"
+                disabled={isSaving}
+              >
+                {isSaving ? "Adding..." : "Add Teacher"}
               </button>
             </div>
           </form>

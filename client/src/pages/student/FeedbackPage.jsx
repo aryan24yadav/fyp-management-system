@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchProject, getFeedback } from "../../store/slices/studentSlice";
 import { AlertTriangle, BadgeCheck, MessageCircle } from "lucide-react";
@@ -10,19 +10,15 @@ const FeedbackPage = () => {
     dispatch(fetchProject());
   }, [dispatch]);
 
+  // Depend on the id only, so re-fetching the same project does not refetch feedback.
+  const projectId = project?._id;
   useEffect(() => {
-    if (project?._id) {
-      dispatch(getFeedback(project._id));
+    if (projectId) {
+      dispatch(getFeedback(projectId));
     }
-  }, [dispatch, project]);
+  }, [dispatch, projectId]);
 
-  // const getStatusTcon = (status) => {
-  //   return (
-  //     <div className={`w-3 h-2 rounded-full ${status === "unread" ? "bg-blue-500" : "bg-slate-300"}`}></div>
-  //   )
-  // }
-
-  const getFeedbackTcon = (type) => {
+  const getFeedbackIcon = (type) => {
     if (type === "positive") {
       return <BadgeCheck className="w-6 h-6 text-green-500" />;
     }
@@ -50,7 +46,7 @@ const FeedbackPage = () => {
       textColor: "text-green-800",
       valueColor: "text-green-900",
       getCount: (feedback) =>
-        feedback.filter((f) => f.type === "positive").length,
+        (feedback || []).filter((f) => f.type === "positive").length,
     },
     {
       type: "negative",
@@ -60,7 +56,7 @@ const FeedbackPage = () => {
       textColor: "text-yellow-800",
       valueColor: "text-yellow-900",
       getCount: (feedback) =>
-        feedback?.filter((f) => f.type === "negative").length,
+        (feedback || []).filter((f) => f.type === "negative").length,
     },
   ];
 
@@ -84,13 +80,10 @@ const FeedbackPage = () => {
               <div key={i} className={`${item.bg} rounded-lg p-4`}>
                 <div className="flex items-center">
                   <div className={`p-2 ${item.iconBg} rounded-lg`}>
-                    {getFeedbackTcon(item.type)}
+                    {getFeedbackIcon(item.type)}
                   </div>
 
                   <div className="ml-3">
-                    {/* fix */}
-                    {/* <p className={`text-xs font-medium ${item.titleColor}`}>{item.title}</p> */}
-
                     <p className={`text-xs font-medium ${item.textColor}`}>
                       {item.title}
                     </p>
@@ -107,45 +100,44 @@ const FeedbackPage = () => {
         {/* FeedBack List */}
         <div className="space-y-4">
           {feedback && feedback.length > 0 ? (
-            feedback.map((f, i) => {
+            feedback.map((f) => {
               return (
                 <div
-                  key={i}
-                  className="border border-slate-200 rounded-lg p-4 hover:shadow-sm"
+                  key={f._id}
+                  className="card border border-slate-200 rounded-lg p-4 hover:shadow-sm"
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center space-x-2">
-                        {getFeedbackTcon(f.type)}
-                        <h3 className="font-medium text-slate-800">
-                          {f.title || "Feedback"}
-                        </h3>
-                      </div>
+                    <div className="flex items-center space-x-2">
+                      {getFeedbackIcon(f.type)}
+                      <h3 className="font-medium text-slate-800">
+                        {f.title || "Feedback"}
+                      </h3>
+                      <span className="badge capitalize bg-slate-100 text-slate-700">
+                        {f.type}
+                      </span>
                     </div>
 
                     <div className="text-right">
-                      <p className="text-sm border-slate-600">
+                      <p className="text-sm text-slate-600">
                         {new Date(f.createdAt).toLocaleDateString()}
                       </p>
-                      <p>{f.supervisorName || "Supervisor"}</p>
-                    </div>
-
-                    <div className="bg-slate-50 rounded-lg mb-3">
-                      <p className="text-slate-700 leading-relaxed">
-                        {f.message}
+                      <p className="text-sm text-slate-800">
+                        {f.supervisorName || "Supervisor"}
                       </p>
                     </div>
+                  </div>
 
-                    <div className="flex justify-between items-center">
-                      <span className="badge badge-approved">Read</span>
-                    </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-slate-700 leading-relaxed whitespace-pre-line">
+                      {f.message}
+                    </p>
                   </div>
                 </div>
               );
             })
           ) : (
             <div className="text-center py-8">
-              <MessageCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />{" "}
+              <MessageCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-500">No feedback available yet.</p>
             </div>
           )}

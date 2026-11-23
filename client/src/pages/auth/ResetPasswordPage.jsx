@@ -4,7 +4,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { KeyRound, Loader } from "lucide-react";
 
 import { resetPassword } from "../../store/slices/authSlice";
-import { toast } from "react-toastify";
 
 const ResetPasswordPage = () => {
   const [errors, setErrors] = useState({});
@@ -49,6 +48,10 @@ const ResetPasswordPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!token) {
+      setError("This reset link is invalid. Please request a new one.");
+      return;
+    }
     if (!validateForm()) return;
 
     try {
@@ -60,14 +63,12 @@ const ResetPasswordPage = () => {
         }),
       ).unwrap();
 
-      // success message
-      toast.success("Password reset successfully");
-      navigate("/login");
-    } catch (error) {
+      // The thunk already shows the success toast. The user is now logged
+      // in; /login forwards them to their dashboard.
+      navigate("/login", { replace: true });
+    } catch (err) {
       setError(
-        error?.message ||
-          error ||
-          "Failed to reset password. Please try again.",
+        err?.message || err || "Failed to reset password. Please try again.",
       );
     }
   };
@@ -137,7 +138,7 @@ const ResetPasswordPage = () => {
               >
                 {isUpdatingPassword ? (
                   <div className="flex items-center justify-center gap-2">
-                    <Loader className="animate-spin -m1-1 mr-2 h-4 w-4 text-white" />
+                    <Loader className="animate-spin mr-2 h-4 w-4 text-white" />
                     Resetting...
                   </div>
                 ) : (
@@ -147,7 +148,7 @@ const ResetPasswordPage = () => {
             </form>
             <div className="text-center mt-6">
               <p className="text-sm text-gray-500">
-                Remembered your password?
+                Remembered your password?{" "}
                 <Link
                   to="/login"
                   className="text-sm text-blue-600 hover:text-blue-800"

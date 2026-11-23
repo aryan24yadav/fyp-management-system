@@ -1,6 +1,10 @@
 // tailwind.config.js
+// ESM syntax: package.json has "type": "module", so `module.exports` /
+// `require` are not valid in this file (and fail ESLint with no-undef).
+import tailwindcssAnimate from "tailwindcss-animate";
 
-module.exports = {
+/** @type {import('tailwindcss').Config} */
+export default {
   darkMode: ["class"],
   content: [
     "./pages/**/*.{js,jsx}",
@@ -84,5 +88,5 @@ module.exports = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 };

@@ -3,13 +3,12 @@ import { useDispatch, useSelector } from "react-redux";
 import AddStudent from "../../components/modal/AddStudent";
 import {
   getAllUsers,
-  createStudent,
+  getAllProjects,
   updateStudent,
   deleteStudent,
 } from "../../store/slices/adminSlice";
 import {
   AlertTriangle,
-  Check,
   CheckCircle,
   Plus,
   TriangleAlert,
@@ -17,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { toggleCreateStudentModal } from "../../store/slices/popupSlice";
+import { departmentOptions } from "../../lib/constants";
 
 const ManageStudents = () => {
   const { users, projects } = useSelector((state) => state.admin);
@@ -39,22 +39,35 @@ const ManageStudents = () => {
   const students = useMemo(() => {
     const Studentsusers = (users || []).filter((u) => u?.role === "Student");
 
+    const teacherNames = new Map(
+      (users || [])
+        .filter((u) => u?.role === "Teacher")
+        .map((t) => [t._id, t.name]),
+    );
+
     return Studentsusers.map((student) => {
+      // projects are sorted newest first, so find() returns the latest one
       const studentsProject = (projects || []).find(
         (p) => p.student?._id === student._id,
-      ); // fix projects.find(p => p.student === student._id)
+      );
 
       return {
         ...student,
         projectTitle: studentsProject?.title || null,
-        supervisor: studentsProject?.supervisor || null,
+        // project.supervisor is a populated object; student.supervisor is an id
+        supervisorName:
+          studentsProject?.supervisor?.name ||
+          teacherNames.get(student.supervisor) ||
+          null,
         projectStatus: studentsProject?.status || null,
       };
     });
   }, [users, projects]);
 
+  // This page needs both lists (App.jsx no longer prefetches them).
   useEffect(() => {
     dispatch(getAllUsers());
+    dispatch(getAllProjects());
   }, [dispatch]);
 
   const departments = useMemo(() => {
@@ -83,12 +96,14 @@ const ManageStudents = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingStudent) {
-      dispatch(updateStudent({ id: editingStudent._id, data: formData }));
-    }
-    handleClosedModal();
+    if (!editingStudent) return;
+    const result = await dispatch(
+      updateStudent({ id: editingStudent._id, data: formData }),
+    );
+    // Keep the modal open on errors (e.g. duplicate e-mail) so edits aren't lost.
+    if (updateStudent.fulfilled.match(result)) handleClosedModal();
   };
 
   const handleEdit = (student) => {
@@ -96,7 +111,7 @@ const ManageStudents = () => {
     setFormData({
       name: student.name,
       email: student.email,
-      department: student.department,
+      department: student.department || "Computer Science",
     });
     setShowModal(true);
   };
@@ -124,7 +139,7 @@ const ManageStudents = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="card">
-          <div className="card header flex flex-col md:flex-row justify-between items-start md:items-center">
+          <div className="card-header flex flex-col md:flex-row justify-between items-start md:items-center">
             <div>
               <h1 className="card-title">Manage Students</h1>
               <p className="card-subtitle">Add,Edit and Manage your students</p>
@@ -165,14 +180,13 @@ const ManageStudents = () => {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">
-                  completed projects
+                  Completed Projects
                 </p>
                 <p className="text-lg font-semibold text-gray-800">
                   {
                     students.filter((s) => s.projectStatus === "completed")
                       .length
-                  }{" "}
-                  {/*s.status === "Completed"*/} fix
+                  }
                 </p>
               </div>
             </div>
@@ -186,7 +200,7 @@ const ManageStudents = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Unassigned</p>
                 <p className="text-lg font-semibold text-gray-800">
-                  {students.filter((s) => !s.supervisor).length}
+                  {students.filter((s) => !s.supervisorName).length}
                 </p>
               </div>
             </div>
@@ -197,7 +211,7 @@ const ManageStudents = () => {
         <div className="card">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
-              <label className="block text-sm font medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Search
               </label>
               <input
@@ -211,7 +225,7 @@ const ManageStudents = () => {
 
             <div className="w-full md:w-48">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Filter Status
+                Filter Department
               </label>
               <select
                 value={filterDepartment}
@@ -245,7 +259,7 @@ const ManageStudents = () => {
                     </th>
                     <th className="px-6 py-3 text-left text-xs">
                       <span className="text-xs font-bold uppercase tracking-wider">
-                        Department & Year
+                        Department & Joined
                       </span>
                     </th>
                     <th className="px-6 py-3 text-left text-xs">
@@ -281,7 +295,7 @@ const ManageStudents = () => {
                           </div>
                         </td>
 
-                        <td className="px-6 py-4 white-space-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-slate-900">
                             {student.department || "-"}
                           </div>
@@ -292,17 +306,19 @@ const ManageStudents = () => {
                           </div>
                         </td>
 
-                        <td className="px-6 py-4 white-space-nowrap">
-                          {student.supervisor ? (
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-slate-900">
+                            {student.projectTitle || "-"}
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {student.supervisorName ? (
                             <span
                               className="inline-flex items-center px-2 py-0.5 rounded-full
-                      text-green-800 bg-gray-100 text-xs font-medium"
+                      text-green-800 bg-green-100 text-xs font-medium"
                             >
-                              {
-                                users?.find(
-                                  (user) => user._id === student?.supervisor,
-                                )?.name
-                              }
+                              {student.supervisorName}
                             </span>
                           ) : (
                             <span
@@ -314,12 +330,6 @@ const ManageStudents = () => {
                                 : "Not Assigned"}
                             </span>
                           )}
-                        </td>
-
-                        <td className="px-6 py-4">
-                          <div className="text-sm text slate-900">
-                            {student.projectTitle}
-                          </div>
                         </td>
 
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -363,7 +373,7 @@ const ManageStudents = () => {
                   </h3>
                   <button
                     onClick={handleClosedModal}
-                    className="text-slate-400 hover:to-slate-600"
+                    className="text-slate-400 hover:text-slate-600"
                   >
                     <X className="w-6 h-6" />
                   </button>
@@ -412,10 +422,11 @@ const ManageStudents = () => {
                       required
                       className="input-field w-full py-1 border-b border-slate-600 focus:outline-none"
                     >
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Electronics">Electronics</option>
-                      <option value="Mechanical">Mechanical</option>
-                      <option value="IT">IT</option>
+                      {departmentOptions(formData.department).map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -441,7 +452,7 @@ const ManageStudents = () => {
               <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
                 <div className="flex items-center mb-4 ">
                   <div
-                    className="flex-shrink-0 w-10 h-10 max-auto flex items-center justify-center
+                    className="flex-shrink-0 w-10 h-10 mx-auto flex items-center justify-center
                 rounded-full bg-red-100"
                   >
                     <AlertTriangle className="w-6 h-6 text-red-600" />

@@ -1,33 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { createDeadline } from "../../store/slices/deadlineSlice";
+import { getAllProjects } from "../../store/slices/adminSlice";
 import { X } from "lucide-react";
+
+const emptyForm = { projectTitle: "", deadlineDate: "" };
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const DeadlinesPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [formData, setFormData] = useState({
-    projectTitle: "",
-    studentName: "",
-    supervisor: "",
-    deadlineDate: "",
-    description: "",
-  });
-
+  const [formData, setFormData] = useState(emptyForm);
   const [selectedProject, setSelectedProject] = useState(null);
   const [query, setQuery] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const dispatch = useDispatch();
   const { projects } = useSelector((state) => state.admin);
 
-  const [viewProjects, setViewProjects] = useState(projects || []);
-
   useEffect(() => {
-    setViewProjects(projects || []);
-  }, [projects]);
+    dispatch(getAllProjects());
+  }, [dispatch]);
 
+  // Deadlines can only be set on approved projects (enforced by the API).
+  const approvedProjects = useMemo(
+    () => (projects || []).filter((p) => p.status === "approved"),
+    [projects],
+  );
+
+  // The table reads straight from the store; adminSlice updates the project
+  // when a deadline is saved (the old local copy never refreshed).
   const projectRows = useMemo(() => {
-    return (viewProjects || []).map((p) => ({
+    return (projects || []).map((p) => ({
       _id: p._id,
       title: p.title,
       studentName: p.student?.name || "-",
@@ -40,7 +44,7 @@ const DeadlinesPage = () => {
       updatedAt: p.updatedAt ? new Date(p.updatedAt).toISOString() : "-",
       raw: p,
     }));
-  }, [viewProjects]);
+  }, [projects]);
 
   const filteredProjects = projectRows.filter((row) => {
     const matchesSearch =
@@ -49,45 +53,31 @@ const DeadlinesPage = () => {
     return matchesSearch;
   });
 
+  const closeModal = () => {
+    setShowModal(false);
+    setFormData(emptyForm);
+    setSelectedProject(null);
+    setQuery("");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedProject || !formData.deadlineDate) return;
 
-    let deadlineData = {
-      name: selectedProject?.title || selectedProject?.student?.name,
-      dueDate: formData.deadlineDate,
-      project: selectedProject?._id,
-    };
-
-    try {
-      const updated = await dispatch(
-        createDeadline({
-          id: selectedProject._id,
-          data: deadlineData,
-        }),
-      ).unwrap();
-
-      const updatedProject = updated?.project || updated;
-
-      if (updatedProject?._id) {
-        setViewProjects((prev) =>
-          prev.map((p) =>
-            p._id === updatedProject._id ? { ...p, ...updatedProject } : p,
-          ),
-        );
-      }
-    } finally {
-      setShowModal(false);
-      setFormData({
-        projectTitle: "",
-        studentName: "",
-        supervisor: "",
-        deadlineDate: "",
-        description: "",
-      });
-      setSelectedProject(null);
-      setQuery("");
-    }
+    setIsSaving(true);
+    const result = await dispatch(
+      createDeadline({
+        id: selectedProject._id,
+        data: {
+          name: (selectedProject.title || "Project deadline").slice(0, 100),
+          dueDate: formData.deadlineDate,
+        },
+      }),
+    );
+    setIsSaving(false);
+    // The old try/finally had no catch: a failed save raised an unhandled
+    // promise rejection and still closed the modal.
+    if (createDeadline.fulfilled.match(result)) closeModal();
   };
 
   return (
@@ -161,6 +151,9 @@ const DeadlinesPage = () => {
                     <tr key={row._id} className="hover:bg-slate-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
+                          <div className="text-sm font-medium text-slate-900">
+                            {row.studentName}
+                          </div>
                           <div className="text-sm text-slate-500">
                             {row.studentEmail}
                           </div>
@@ -222,7 +215,7 @@ const DeadlinesPage = () => {
                   Update/Create Deadline
                 </h3>
                 <button
-                  onClick={() => setShowModal(false)}
+                  onClick={closeModal}
                   className="text-slate-400 hover:text-slate-600"
                 >
                   <X className="w-5 h-5" />
@@ -235,7 +228,7 @@ const DeadlinesPage = () => {
                   <input
                     type="text"
                     className="input"
-                    placeholder="Start typing to search projects..."
+                    placeholder="Start typing to search approved projects..."
                     value={query}
                     onChange={(e) => {
                       setQuery(e.target.value);
@@ -248,7 +241,7 @@ const DeadlinesPage = () => {
                   />
                   {query && !selectedProject && (
                     <div className="mt-2 border border-slate-200 rounded-md max-h-56 overflow-y-auto">
-                      {(projects || [])
+                      {approvedProjects
                         .filter((p) =>
                           (p.title || "")
                             .toLowerCase()
@@ -293,6 +286,8 @@ const DeadlinesPage = () => {
                   <input
                     type="date"
                     className="input-field w-full"
+                    min={todayISO()}
+                    required
                     disabled={!selectedProject}
                     value={formData.deadlineDate}
                     onChange={(e) =>
@@ -346,16 +341,20 @@ const DeadlinesPage = () => {
                   </div>
                 )}
 
-                <div className="flex justify-end spcae-x-3 pt-4">
+                <div className="flex justify-end space-x-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => setShowModal(false)}
+                    onClick={closeModal}
                     className="btn-secondary"
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn-primary">
-                    Save Deadline
+                  <button
+                    type="submit"
+                    className="btn-primary disabled:opacity-50"
+                    disabled={!selectedProject || !formData.deadlineDate || isSaving}
+                  >
+                    {isSaving ? "Saving..." : "Save Deadline"}
                   </button>
                 </div>
               </form>

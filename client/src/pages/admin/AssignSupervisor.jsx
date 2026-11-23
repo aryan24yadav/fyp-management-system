@@ -3,9 +3,18 @@ import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import {
   assignSupervisor as assignSupervisorThunk,
+  getAllProjects,
   getAllUsers,
 } from "../../store/slices/adminSlice";
 import { AlertTriangle, CheckCircle, Users } from "lucide-react";
+
+const Badge = ({ color, children }) => (
+  <span
+    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}
+  >
+    {children}
+  </span>
+);
 
 const AssignSupervisor = () => {
   const dispatch = useDispatch();
@@ -17,9 +26,8 @@ const AssignSupervisor = () => {
   const { users, projects } = useSelector((state) => state.admin);
 
   useEffect(() => {
-    if (!users || users.length === 0) {
-      dispatch(getAllUsers());
-    }
+    dispatch(getAllUsers());
+    dispatch(getAllProjects());
   }, [dispatch]);
 
   const teachers = useMemo(() => {
@@ -39,15 +47,17 @@ const AssignSupervisor = () => {
   }, [users]);
 
   const studentProjects = useMemo(() => {
+    // Keep projects that HAVE a student (the old `!p.student?._id` kept only
+    // orphaned projects, so the table was always empty).
     return (projects || [])
-      .filter((p) => !p.student?._id)
+      .filter((p) => p.student?._id)
       .map((p) => ({
         projectId: p._id,
         title: p.title,
         status: p.status,
         supervisor: p.supervisor?.name || null,
         supervisorId: p.supervisor?._id || null,
-        studentId: p.student?._id || "Unknown",
+        studentId: p.student._id,
         studentName: p.student?.name || "-",
         studentEmail: p.student?.email || "-",
         deadline: p.deadline
@@ -93,15 +103,16 @@ const AssignSupervisor = () => {
     );
     setPendingFor(null);
 
+    // On failure the thunk already shows the server's error message.
     if (assignSupervisorThunk.fulfilled.match(res)) {
       setSelectedSupervisor((prev) => {
         const newState = { ...prev };
         delete newState[projectId];
         return newState;
       });
+      // Refresh capacities and the project's supervisor column.
       dispatch(getAllUsers());
-    } else {
-      toast.error("Failed to assign supervisor");
+      dispatch(getAllProjects());
     }
   };
 
@@ -142,25 +153,15 @@ const AssignSupervisor = () => {
     "Actions",
   ];
 
-  const Badge = ({ color, children }) => {
-    return (
-      <span
-        className={`inline-slex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}
-      >
-        {children}
-      </span>
-    );
-  };
   return (
     <>
       <div className="space-y-6">
         <div className="card">
           <div className="card-header">
-            <div className="card-title">
-              <p className="card-subtitle">
-                Manage Supervisor Assignments for students and projects
-              </p>
-            </div>
+            <h1 className="card-title">Assign Supervisor</h1>
+            <p className="card-subtitle">
+              Manage supervisor assignments for students and projects
+            </p>
           </div>
         </div>
 
@@ -226,6 +227,9 @@ const AssignSupervisor = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-slate-900">
+                          {row.studentName}
+                        </div>
+                        <div className="text-sm text-slate-500">
                           {row.studentEmail}
                         </div>
                       </div>
@@ -233,23 +237,17 @@ const AssignSupervisor = () => {
 
                     <td className="px-6 py-4">{row.title}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="px-6 py-4 whitespace-nowrap">
-                        {row.supervisor !== null ? (
-                          <Badge
-                            color={"bg-green-100 text-green-800"}
-                            children={row.supervisor}
-                          />
-                        ) : (
-                          <Badge
-                            color={"bg-red-100 text-red-800"}
-                            children={
-                              row.status === "rejected"
-                                ? "Rejected"
-                                : "Not Assigned"
-                            }
-                          />
-                        )}
-                      </div>
+                      {row.supervisor !== null ? (
+                        <Badge color="bg-green-100 text-green-800">
+                          {row.supervisor}
+                        </Badge>
+                      ) : (
+                        <Badge color="bg-red-100 text-red-800">
+                          {row.status === "rejected"
+                            ? "Rejected"
+                            : "Not Assigned"}
+                        </Badge>
+                      )}
                     </td>
                     <td className="px-6 py-4">{row.deadline}</td>
                     <td className="px-6 py-4">{row.updatedAt}</td>
@@ -279,9 +277,9 @@ const AssignSupervisor = () => {
                       </select>
                     </td>
 
-                    <td className="px-6 py-4 whitespace-nowra text-sm font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
-                        className="btn-primary text-sm"
+                        className="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={() =>
                           handleAssign(row.studentId, row.status, row.projectId)
                         }

@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { axiosInstance } from "../../lib/axios";
+import { axiosInstance, getErrorMessage } from "../../lib/axios";
 import { toast } from "react-toastify";
+import { createDeadline } from "./deadlineSlice";
 
 export const createStudent = createAsyncThunk(
   "createStudent",
@@ -10,10 +11,9 @@ export const createStudent = createAsyncThunk(
       toast.success("Student created successfully");
       return res.data.data.user;
     } catch (error) {
-      const message =
-        error.response?.data?.message || "Failed to create student";
+      const message = getErrorMessage(error, "Failed to create student");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -26,10 +26,9 @@ export const updateStudent = createAsyncThunk(
       toast.success(res.data.message || "Student updated successfully");
       return res.data.data.user;
     } catch (error) {
-      const message =
-        error.response?.data?.message || "Failed to update student";
+      const message = getErrorMessage(error, "Failed to update student");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -42,10 +41,9 @@ export const deleteStudent = createAsyncThunk(
       toast.success(res.data.message || "Student deleted successfully");
       return id;
     } catch (error) {
-      const message =
-        error.response?.data?.message || "Failed to delete student";
+      const message = getErrorMessage(error, "Failed to delete student");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -57,9 +55,9 @@ export const getAllUsers = createAsyncThunk(
       const res = await axiosInstance.get(`/admin/users`);
       return res.data.data;
     } catch (error) {
-      const message = error.response?.data?.message || "Failed to fetch users";
+      const message = getErrorMessage(error, "Failed to fetch users");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -72,10 +70,9 @@ export const createTeacher = createAsyncThunk(
       toast.success(res.data.message || "Teacher created successfully");
       return res.data.data.user;
     } catch (error) {
-      const message =
-        error.response?.data?.message || "Failed to create teacher";
+      const message = getErrorMessage(error, "Failed to create teacher");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -88,10 +85,9 @@ export const updateTeacher = createAsyncThunk(
       toast.success(res.data.message || "Teacher updated successfully");
       return res.data.data.user;
     } catch (error) {
-      const message =
-        error.response?.data?.message || "Failed to update teacher";
+      const message = getErrorMessage(error, "Failed to update teacher");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -104,10 +100,9 @@ export const deleteTeacher = createAsyncThunk(
       toast.success(res.data.message || "Teacher deleted successfully");
       return id;
     } catch (error) {
-      const message =
-        error.response?.data?.message || "Failed to delete teacher";
+      const message = getErrorMessage(error, "Failed to delete teacher");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -119,10 +114,9 @@ export const getAllProjects = createAsyncThunk(
       const res = await axiosInstance.get(`/admin/projects`);
       return res.data.data;
     } catch (error) {
-      const message =
-        error.response?.data?.message || "Failed to fetch projects";
+      const message = getErrorMessage(error, "Failed to fetch projects");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -134,10 +128,9 @@ export const getDashBoardStats = createAsyncThunk(
       const res = await axiosInstance.get(`/admin/fetch-dashboard-stats`);
       return res.data.data.stats;
     } catch (error) {
-      const message =
-        error.response?.data?.message || "Failed to fetch dashboard stats";
+      const message = getErrorMessage(error, "Failed to fetch dashboard stats");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -150,10 +143,9 @@ export const assignSupervisor = createAsyncThunk(
       toast.success(res.data.message || "Supervisor assigned successfully");
       return res.data.data;
     } catch (error) {
-      const message =
-        error.response.data.message || "Failed to assign supervisor";
+      const message = getErrorMessage(error, "Failed to assign supervisor");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -168,10 +160,9 @@ export const approveProject = createAsyncThunk(
       toast.success(res.data.message || "Project approved successfully");
       return id;
     } catch (error) {
-      const message =
-        error.response.data.message || "Failed to approve project";
+      const message = getErrorMessage(error, "Failed to approve project");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -186,9 +177,9 @@ export const rejectProject = createAsyncThunk(
       toast.success(res.data.message || "Project rejected successfully");
       return id;
     } catch (error) {
-      const message = error.response.data.message || "Failed to reject project";
+      const message = getErrorMessage(error, "Failed to reject project");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -198,12 +189,11 @@ export const getProject = createAsyncThunk(
   async (id, thunkAPI) => {
     try {
       const res = await axiosInstance.get(`/admin/project/${id}`);
-      // toast.success(res.data.message || "Project rejected successfully");
-      return res.data?.data?.project || res.data?.data || res.data;
+      return res.data?.data?.project || null;
     } catch (error) {
-      const message = error.response.data.message || "Failed to fetch project";
+      const message = getErrorMessage(error, "Failed to fetch project");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -271,6 +261,14 @@ const adminSlice = createSlice({
         const projectId = action.payload;
         state.projects = state.projects.map((p) =>
           p._id === projectId ? { ...p, status: "rejected" } : p,
+        );
+      })
+      // Keep the projects table in sync after a deadline is saved.
+      .addCase(createDeadline.fulfilled, (state, action) => {
+        const updated = action.payload?.project;
+        if (!updated?._id) return;
+        state.projects = state.projects.map((p) =>
+          p._id === updated._id ? { ...p, ...updated } : p,
         );
       });
   },

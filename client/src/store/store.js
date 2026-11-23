@@ -21,4 +21,12 @@ export const store = configureStore({
     student: studentReducer,
     teacher: teacherReducer,
   },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        // Download thunks return a Blob and the upload thunk receives File
+        // objects; they are never stored in the state.
+        ignoredActionPaths: ["payload.blob", "meta.arg.files"],
+      },
+    }),
 });

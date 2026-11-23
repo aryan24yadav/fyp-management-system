@@ -16,9 +16,9 @@ const StudentDashboard = () => {
   const supervisorName = dashboardStats?.supervisorName || "N/A";
   const upcomingDeadlines = dashboardStats?.upcomingDeadlines || [];
   const topNotifications = dashboardStats?.topNotifications || [];
-  const feedbackList =
-    dashboardStats?.feedbackNotifications?.slice(-2).reverse() || [];
-  // const feedbackList = dashboardStats?.feedbackList?.slice(-2).reverse() || [];
+  // The API already returns the two newest feedback items, newest first.
+  // (.slice(-2).reverse() flipped the order, so "Recent Feedback" showed the older one.)
+  const feedbackList = dashboardStats?.feedbackNotifications || [];
 
   const formatDate = (dateStr) => {
     if (!dateStr) {
@@ -31,24 +31,6 @@ const StudentDashboard = () => {
     });
   };
 
-  // const getStatusColor = (status) => {
-  //   switch(status) {
-  //     case "upcoming":
-  //       return "badge-pending"
-  //       break;
-
-  //     case "completed":
-  //       return "badge-approved"
-  //       break;
-
-  //     case "overdue":
-  //       return "badge-rejected"
-  //       break;
-
-  //     default:
-  //       return "badge-pending"
-  //   }
-  // }
 
   return (
     <>
@@ -113,7 +95,7 @@ const StudentDashboard = () => {
                 </p>
                 <p className="text-lg font-semibold text-slate-800">
                   {feedbackList?.length
-                    ? formatDate(feedbackList[0]?.createdAt) // fix createAt
+                    ? formatDate(feedbackList[0]?.createdAt)
                     : "No Feedback Yet"}
                 </p>
               </div>
@@ -198,10 +180,10 @@ const StudentDashboard = () => {
 
             {feedbackList && feedbackList.length > 0 ? (
               <div className="space-y-4 p-4">
-                {feedbackList.map((feedback, index) => {
+                {feedbackList.map((feedback) => {
                   return (
                     <div
-                      key={index}
+                      key={feedback._id}
                       className="border
                             border-slate-200 rounded-lg p-4
                             hover:shadow-md transition-shadow"
@@ -222,7 +204,7 @@ const StudentDashboard = () => {
                         </p>
                       </div>
 
-                      <div className="text-slate-50 rounded-lg p-3 ">
+                      <div className="bg-slate-50 rounded-lg p-3">
                         <p className="text-slate-700 text-sm leading-relaxed">
                           {feedback.message}
                         </p>
@@ -299,12 +281,13 @@ const StudentDashboard = () => {
           <div className="card">
             <div className="card-header">
               <h2 className="card-title">Recent Notifications</h2>
+            </div>
               {topNotifications && topNotifications.length > 0 ? (
                 <div className="space-y-3">
-                  {topNotifications.map((n, i) => {
+                  {topNotifications.map((n) => {
                     return (
                       <div
-                        key={i}
+                        key={n._id}
                         className="p-3 bg-slate-50 rounded-lg border border-slate-100"
                       >
                         <p className="font-medium text-slate-800">
@@ -328,7 +311,6 @@ const StudentDashboard = () => {
                   </p>
                 </div>
               )}
-            </div>
           </div>
         </div>
       </div>

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
 const Sidebar = ({ open, setOpen, userRole }) => {
@@ -322,6 +321,9 @@ const Sidebar = ({ open, setOpen, userRole }) => {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  // "Home" (/student, /teacher, /admin) must only be active on
+                  // exact match, not on every child page.
+                  end={item.path.split("/").length === 2}
                   className={({ isActive }) => `
                     flex items-center px-4 py-3 rounded-lg transition-all duration-200
                     ${
@@ -381,6 +383,9 @@ const Sidebar = ({ open, setOpen, userRole }) => {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  // "Home" (/student, /teacher, /admin) must only be active on
+                  // exact match, not on every child page.
+                  end={item.path.split("/").length === 2}
                   className={({ isActive }) => `
                     flex items-center px-4 py-3 rounded-lg transition-all duration-200
                     ${isActive
@@ -434,6 +439,9 @@ const Sidebar = ({ open, setOpen, userRole }) => {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  // "Home" (/student, /teacher, /admin) must only be active on
+                  // exact match, not on every child page.
+                  end={item.path.split("/").length === 2}
                   className={({ isActive }) => `
               flex items-center px-4 py-3 rounded-lg transition-all duration-200
               ${

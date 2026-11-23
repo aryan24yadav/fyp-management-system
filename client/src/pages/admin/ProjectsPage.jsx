@@ -1,13 +1,22 @@
-import { AlertTriangle, CheckCircle2, Folder, X } from "lucide-react";
-import { useMemo, useState } from "react";
+// `Plus` was used but never imported, so this whole page crashed on render
+// with "Plus is not defined".
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Folder,
+  Plus,
+  X,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { toast } from "react-toastify";
 import {
   approveProject,
+  getAllProjects,
   getProject,
   rejectProject,
 } from "../../store/slices/adminSlice";
 import { downloadProjectFile } from "../../store/slices/projectSlice";
+import { downloadWithThunk } from "../../lib/download";
 
 const ProjectsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -17,25 +26,25 @@ const ProjectsPage = () => {
   const [reportSearch, setReportSearch] = useState("");
 
   const [showViewModal, setShowViewModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [currentProject, setCurrentProject] = useState(null);
-  const [editForm, setEditForm] = useState({
-    title: "",
-    description: "",
-    deadline: "",
-  });
+  const [busyId, setBusyId] = useState(null);
 
   const dispatch = useDispatch();
-  const { projects } = useSelector((state) => state.admin);
+  const { projects: storeProjects } = useSelector((state) => state.admin);
+  const projects = useMemo(() => storeProjects || [], [storeProjects]);
+
+  useEffect(() => {
+    dispatch(getAllProjects());
+  }, [dispatch]);
 
   const supervisors = useMemo(() => {
     const set = new Set(
-      projects?.map((p) => p?.supervisor?.name).filter(Boolean),
+      projects.map((p) => p?.supervisor?.name).filter(Boolean),
     );
     return Array.from(set);
   }, [projects]);
 
-  const filteredProjects = projects?.filter((project) => {
+  const filteredProjects = projects.filter((project) => {
     const matchesSearch =
       (project.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (project.student?.name || "")
@@ -53,7 +62,7 @@ const ProjectsPage = () => {
   });
 
   const files = useMemo(() => {
-    return (projects || []).flatMap((p) =>
+    return projects.flatMap((p) =>
       (p.files || []).map((f) => ({
         projectId: p._id,
         fileId: f._id,
@@ -65,7 +74,7 @@ const ProjectsPage = () => {
     );
   }, [projects]);
 
-  const filteredFiles = files?.filter(
+  const filteredFiles = files.filter(
     (file) =>
       (file.originalName || "")
         .toLowerCase()
@@ -78,21 +87,13 @@ const ProjectsPage = () => {
         .includes(reportSearch.toLowerCase()),
   );
 
-  const handleDownloadFile = async (file) => {
-    const res = await dispatch(
-      downloadProjectFile({ projectId: file.projectId, fileId: file.fileId }),
-    ).then((res) => {
-      const { blob } = res.payload;
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", file.originalName || "download");
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    });
-  };
+  const handleDownloadFile = (file) =>
+    downloadWithThunk(
+      dispatch,
+      downloadProjectFile,
+      { projectId: file.projectId, fileId: file.fileId },
+      file.originalName,
+    );
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -110,11 +111,20 @@ const ProjectsPage = () => {
   };
 
   const handleStatusChange = async (projectId, newStatus) => {
+    setBusyId(projectId);
     if (newStatus === "approved") {
-      dispatch(approveProject(projectId)); // dispatch(approveProject({projectId}))
+      await dispatch(approveProject(projectId));
     } else if (newStatus === "rejected") {
-      dispatch(rejectProject(projectId));
+      await dispatch(rejectProject(projectId));
     }
+    setBusyId(null);
+  };
+
+  const handleView = async (projectId) => {
+    const res = await dispatch(getProject(projectId));
+    if (!getProject.fulfilled.match(res) || !res.payload) return;
+    setCurrentProject(res.payload);
+    setShowViewModal(true);
   };
 
   const projectStats = [
@@ -150,9 +160,9 @@ const ProjectsPage = () => {
 
   return (
     <>
-      <div className="spave-y-6">
+      <div className="space-y-6">
         <div className="card">
-          <div className="card header flex flex-col md:flex-row justify-between items-start md:items-center">
+          <div className="card-header flex flex-col md:flex-row justify-between items-start md:items-center">
             <div>
               <h1 className="card-title">All Projects</h1>
               <p className="card-subtitle">View and Manage your projects</p>
@@ -259,7 +269,7 @@ const ProjectsPage = () => {
                     className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase
                     tracking-wider"
                   >
-                    Project Deatils
+                    Project Details
                   </th>
                   <th
                     className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase
@@ -306,7 +316,9 @@ const ProjectsPage = () => {
                         </div>
                         <div className="text-xs text-slate-400">
                           Due:{" "}
-                          {project.deadline && project.deadline.split("T")[0]}
+                          {project.deadline
+                            ? new Date(project.deadline).toLocaleDateString()
+                            : "Not set"}
                         </div>
                       </div>
                     </td>
@@ -324,18 +336,15 @@ const ProjectsPage = () => {
                     </td>
 
                     <td className="px-6 py-3 whitespace-nowrap">
-                      <div
-                        className="text-sm text-slate-900 inline-flex items-center px-2.5 py-0.5
-                        rounded-full font-medium"
-                      >
-                        {project.supervisor?.name ? (
-                          <span className="bg-green-100 text-green-800">
-                            {project.supervisor?.name}
-                          </span>
-                        ) : (
-                          "Unassigned"
-                        )}
-                      </div>
+                      {project.supervisor?.name ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {project.supervisor.name}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          Unassigned
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-6 py-3 whitespace-nowrap">
@@ -356,13 +365,7 @@ const ProjectsPage = () => {
                     <td className="px-6 py-3 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         <button
-                          onClick={async () => {
-                            const res = await dispatch(getProject(project._id));
-                            if (!getProject.fulfilled.match(res)) return;
-                            const detail = res.payload?.project || res.payload;
-                            setCurrentProject(detail);
-                            setShowViewModal(true);
-                          }}
+                          onClick={() => handleView(project._id)}
                           className="btn-primary"
                         >
                           View
@@ -370,7 +373,8 @@ const ProjectsPage = () => {
                         {project.status === "pending" && (
                           <>
                             <button
-                              className="btn-secondary"
+                              className="btn-secondary disabled:opacity-50"
+                              disabled={busyId === project._id}
                               onClick={() =>
                                 handleStatusChange(project._id, "approved")
                               }
@@ -378,7 +382,8 @@ const ProjectsPage = () => {
                               Approve
                             </button>
                             <button
-                              className="btn-danger"
+                              className="btn-danger disabled:opacity-50"
+                              disabled={busyId === project._id}
                               onClick={() =>
                                 handleStatusChange(project._id, "rejected")
                               }
@@ -404,7 +409,7 @@ const ProjectsPage = () => {
 
         {/* View Modal */}
         {showViewModal && currentProject && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-slate-900">
@@ -474,10 +479,25 @@ const ProjectsPage = () => {
                       No files uploaded
                     </div>
                   ) : (
-                    <ul className="list-disc list-inside text-sm text-slate-700">
+                    <ul className="space-y-2 text-sm text-slate-700">
                       {currentProject.files.map((file) => (
-                        <li key={file._id || file.fileUrl}>
-                          {file.originalName}
+                        <li
+                          key={file._id || file.fileUrl}
+                          className="flex items-center justify-between bg-slate-50 rounded p-2"
+                        >
+                          <span>{file.originalName}</span>
+                          <button
+                            className="btn-outline btn-small"
+                            onClick={() =>
+                              handleDownloadFile({
+                                projectId: currentProject._id,
+                                fileId: file._id,
+                                originalName: file.originalName,
+                              })
+                            }
+                          >
+                            Download
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -490,7 +510,7 @@ const ProjectsPage = () => {
 
         {/* View Report Modal */}
         {isReportOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-slate-900">
@@ -514,7 +534,7 @@ const ProjectsPage = () => {
                 />
               </div>
 
-              {filteredFiles.length == 0 ? (
+              {filteredFiles.length === 0 ? (
                 <div className="text-slate-500">
                   No files found matching your criteria
                 </div>
@@ -523,7 +543,7 @@ const ProjectsPage = () => {
                   {filteredFiles.map((f) => {
                     return (
                       <div
-                        key={`${f.projectId} - ${f.fileId}`}
+                        key={`${f.projectId}-${f.fileId}`}
                         className="flex items-center justify-between p-3 bg-slate-50 rounded"
                       >
                         <div>
@@ -546,7 +566,6 @@ const ProjectsPage = () => {
                 </div>
               )}
 
-              <div></div>
             </div>
           </div>
         )}
