@@ -1,27 +1,55 @@
 import nodemailer from "nodemailer";
-import ErrorHandler from "../middlewares/error.js";
 
+let transporter;
+
+/** Creates the SMTP transporter once and reuses its connection settings. */
+const getTransporter = () => {
+  if (transporter) return transporter;
+
+  const port = Number(process.env.SMTP_PORT) || 587;
+  // SMTP_SERVICE (e.g. "gmail") uses nodemailer's built-in host/port presets;
+  // otherwise SMTP_HOST + SMTP_PORT are used.
+  const connection = process.env.SMTP_SERVICE
+    ? { service: process.env.SMTP_SERVICE }
+    : { host: process.env.SMTP_HOST, port, secure: port === 465 };
+
+  transporter = nodemailer.createTransport({
+    ...connection,
+    auth: {
+      user: process.env.SMTP_MAIL,
+      pass: process.env.SMTP_PASSWORD,
+    },
+  });
+  return transporter;
+};
+
+/** Sends an HTML e-mail. Throws if SMTP is not configured or sending fails. */
 export const sendEmail = async ({ to, subject, message }) => {
-  try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      auth: {
-        user: process.env.SMTP_MAIL,
-        pass: process.env.SMTP_PASSWORD,
-      },
-      service: process.env.SMTP_SERVICE,
-    });
+  if (!process.env.SMTP_MAIL || !process.env.SMTP_PASSWORD) {
+    throw new Error(
+      "Email service is not configured (set SMTP_MAIL and SMTP_PASSWORD)",
+    );
+  }
 
-    const mailOptions = {
-      from: process.env.SMTP_USER,
-      to: to,
-      subject: subject,
-      html: message,
-    };
-    const info = await transporter.sendMail(mailOptions);
-    return info;
+  return getTransporter().sendMail({
+    from:
+      process.env.SMTP_FROM || `"FYP Management System" <${process.env.SMTP_MAIL}>`,
+    to,
+    subject,
+    html: message,
+  });
+};
+
+/**
+ * For non-critical notification e-mails: logs failures instead of throwing,
+ * so a broken SMTP setup never turns a successful action into an error.
+ */
+export const trySendEmail = async (options) => {
+  try {
+    await sendEmail(options);
+    return true;
   } catch (error) {
-    throw new Error(error.message || "Failed to send email");
+    console.error(`Email to ${options.to} failed: ${error.message}`);
+    return false;
   }
 };
