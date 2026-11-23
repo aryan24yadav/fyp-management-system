@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import {
@@ -7,81 +7,118 @@ import {
   downloadFile,
 } from "../../store/slices/studentSlice";
 import { Archive, FileText, FileCode, FilePlus, File } from "lucide-react";
+import { downloadWithThunk, formatFileSize } from "../../lib/download";
+
+// Must match the server limits in server/middlewares/upload.js
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILES = 10;
+
+const fileKey = (file) => `${file.name}-${file.size}-${file.lastModified}`;
+
+const getFileIcon = (fileName = "") => {
+  const extension = fileName.split(".").pop().toLowerCase();
+  const color =
+    extension === "pdf"
+      ? "text-red-500"
+      : ["doc", "docx"].includes(extension)
+        ? "text-blue-500"
+        : ["ppt", "pptx"].includes(extension)
+          ? "text-orange-500"
+          : "text-slate-500";
+
+  return <File className={`w-8 h-8 ${color}`} />;
+};
 
 const UploadFiles = () => {
   const dispatch = useDispatch();
   const { project, files } = useSelector((state) => state.student);
-  const reportRef = useRef(null);
-  const presRef = useRef(null);
-  const codeRef = useRef(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
-    if (!project) {
-      dispatch(fetchProject());
-    }
+    // Always refresh: the cached project may be stale.
+    dispatch(fetchProject());
   }, [dispatch]);
 
+  const canUpload =
+    !!project?._id && !["rejected", "completed"].includes(project.status);
+
   const handleFilePick = (e) => {
-    const list = Array.from(e.target.files || []);
-    setSelectedFiles((prev) => [...prev, ...list]);
+    const picked = Array.from(e.target.files || []);
     e.target.value = "";
+
+    const tooBig = picked.filter((f) => f.size > MAX_FILE_SIZE);
+    if (tooBig.length) {
+      toast.error(
+        `${tooBig.map((f) => f.name).join(", ")} exceed${tooBig.length === 1 ? "s" : ""} the 10MB limit`,
+      );
+    }
+
+    const existing = new Set(selectedFiles.map(fileKey));
+    let next = [
+      ...selectedFiles,
+      ...picked.filter(
+        (f) => f.size <= MAX_FILE_SIZE && !existing.has(fileKey(f)),
+      ),
+    ];
+    if (next.length > MAX_FILES) {
+      toast.error(`You can upload at most ${MAX_FILES} files at once`);
+      next = next.slice(0, MAX_FILES);
+    }
+    setSelectedFiles(next);
   };
 
-  const handleUpload = () => {
-    const activeProject = project;
-    if (selectedFiles.length == 0) return;
-    dispatch(
-      uploadFiles({ projectId: activeProject?._id, files: selectedFiles }),
-    ); // fix projectId: activeProject?.id
-    setSelectedFiles([]);
+  const handleUpload = async () => {
+    if (!project?._id) {
+      toast.error("Submit a project proposal before uploading files");
+      return;
+    }
+    if (selectedFiles.length === 0) {
+      toast.error("Choose at least one file first");
+      return;
+    }
+
+    setIsUploading(true);
+    const result = await dispatch(
+      uploadFiles({ projectId: project._id, files: selectedFiles }),
+    );
+    setIsUploading(false);
+    // Keep the selection if the upload failed so the user can retry.
+    if (uploadFiles.fulfilled.match(result)) setSelectedFiles([]);
   };
 
-  const removeSelected = (name) => {
-    setSelectedFiles((prev) => prev.filter((f) => f.name !== name));
+  const removeSelected = (key) => {
+    setSelectedFiles((prev) => prev.filter((f) => fileKey(f) !== key));
   };
 
-  const getFileIcon = (fileName) => {
-    const extension = fileName.split(".").pop().toLowerCase();
-    const Icon = ({ className }) => <File className={className} />;
-    const color =
-      extension === "pdf"
-        ? "text-red-500"
-        : ["doc", "docx"].includes(extension)
-          ? "text-blue-500"
-          : ["ppt", "pptx"].includes(extension)
-            ? "text-orange-500"
-            : "text-slate-500";
+  const handleDownloadFile = (file) =>
+    downloadWithThunk(
+      dispatch,
+      downloadFile,
+      { projectId: project._id, fileId: file._id },
+      file.originalName,
+    );
 
-    return <Icon className={`w-8 h-8 ${color}`} />;
-  };
-
-  const handleDownloadFile = async (file) => {
-    const res = await dispatch(
-      downloadFile({ projectId: project._id, fileId: file._id }),
-    ).then((res) => {
-      const { blob } = res.payload;
-      // const url = window.URL.createObjectURL(new Blob(blob)); // fix
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", file.name || "download");
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    });
-
-    // const url = URL.createObjectURL(res.payload.blob);
-
-    // const a = Object.assign(document.createElement("a"), {
-    //   href: url,
-    //   download: file.name || "download",
-    // });
-    // a.click();
-    // URL.revokeObjectURL(url);
-  };
+  const uploadCards = [
+    {
+      title: "Project Report",
+      hint: "Upload your project report (PDF, DOC, DOCX)",
+      accept: ".pdf,.doc,.docx",
+      Icon: FileText,
+    },
+    {
+      title: "Presentation",
+      hint: "Upload your presentation (PDF, PPT, PPTX)",
+      accept: ".pdf,.ppt,.pptx",
+      Icon: Archive,
+    },
+    {
+      title: "Code Files",
+      hint: "Upload your code (zip, rar, 7z, tar, gz)",
+      accept: ".zip,.rar,.7z,.tar,.gz,.tgz",
+      Icon: FileCode,
+    },
+  ];
 
   return (
     <>
@@ -90,99 +127,65 @@ const UploadFiles = () => {
           <div className="card-header">
             <h1 className="card-title"> Upload Project Files</h1>
             <p className="card-subtitle">
-              Upload Your Project Report,Presentation and Source Code.
+              Upload your project report, presentation and source code (max
+              10MB per file, {MAX_FILES} files at once).
             </p>
           </div>
 
+          {!project?._id && (
+            <div className="mb-4 p-4 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+              You need to submit a project proposal before uploading files.
+            </div>
+          )}
+          {project?._id && !canUpload && (
+            <div className="mb-4 p-4 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+              Files cannot be uploaded to a {project.status} project.
+            </div>
+          )}
+
           {/* upload section */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div
-              className="border-2 border-dashed border-slate-300 rounded
-          -lg p-6 text-center hover:border-blue-400 transition-colors"
-            >
-              <div className="mb-4">
-                <FileText className="w-12 h-12 text-slate-400 mx-auto" />
+            {uploadCards.map(({ title, hint, accept, Icon }) => (
+              <div
+                key={title}
+                className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors"
+              >
+                <div className="mb-4">
+                  <Icon className="w-12 h-12 text-slate-400 mx-auto" />
+                </div>
+                <h3 className="text-lg font-medium text-slate-800 mb-2">
+                  {title}
+                </h3>
+                <p className="text-sm text-slate-600 mb-4">{hint}</p>
+                <label
+                  className={`btn-outline inline-block ${canUpload ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+                >
+                  Choose File
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept={accept}
+                    onChange={handleFilePick}
+                    disabled={!canUpload}
+                    multiple
+                  />
+                </label>
               </div>
-              <h3 className="text-lg font-medium text-slate-800 mb-2">
-                Project Report
-              </h3>
-              <p className="text-sm text-slate-600 mb-4">
-                Upload your project report (PDF,DOC)
-              </p>
-              <label className="btn-outline curor-pointer">
-                Choose File
-                <input
-                  type="file"
-                  ref={reportRef}
-                  className="hidden"
-                  accept=".pdf,.doc,.docx"
-                  onChange={handleFilePick}
-                  multiple
-                />
-              </label>
-            </div>
-
-            <div
-              className="border-2 border-dashed border-slate-300 rounded
-          -lg p-6 text-center hover:border-blue-400 transition-colors"
-            >
-              <div className="mb-4">
-                <Archive className="w-12 h-12 text-slate-400 mx-auto" />
-              </div>
-              <h3 className="text-lg font-medium text-slate-800 mb-2">
-                Presentation
-              </h3>
-              <p className="text-sm text-slate-600 mb-4">
-                Upload your Presentation (PDF,PPT,PPTX)
-              </p>
-              <label className="btn-outline curor-pointer">
-                Choose File
-                <input
-                  type="file"
-                  ref={presRef}
-                  className="hidden"
-                  accept=".pdf,.ppt,.pptx"
-                  onChange={handleFilePick}
-                  multiple
-                />
-              </label>
-            </div>
-
-            <div
-              className="border-2 border-dashed border-slate-300 rounded
-             -lg p-6 text-center hover:border-blue-400 transition-colors"
-            >
-              <div className="mb-4">
-                <FileCode className="w-12 h-12 text-slate-400 mx-auto" />
-              </div>
-              <h3 className="text-lg font-medium text-slate-800 mb-2">
-                Code Files
-              </h3>
-              <p className="text-sm text-slate-600 mb-4">
-                Upload your Code Files (zip, rar,tar,gz)
-              </p>
-              <label className="btn-outline curor-pointer">
-                Choose File
-                <input
-                  type="file"
-                  ref={codeRef}
-                  className="hidden"
-                  accept=".zip,.rar,.tar,.gz"
-                  onChange={handleFilePick}
-                  multiple
-                />
-              </label>
-            </div>
+            ))}
           </div>
 
-          <div className="flex grid-cols-1 md:grid-cols-3 gap-3">
-            <button onClick={handleUpload} className="btn-primary">
-              Upload Selected Files
+          <div className="flex justify-end mt-6">
+            <button
+              onClick={handleUpload}
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!canUpload || isUploading || selectedFiles.length === 0}
+            >
+              {isUploading ? "Uploading..." : "Upload Selected Files"}
             </button>
           </div>
         </div>
 
-        {/* selcted Files preview*/}
+        {/* selected files preview */}
         {selectedFiles.length > 0 && (
           <div className="card">
             <div className="card-header">
@@ -191,33 +194,25 @@ const UploadFiles = () => {
 
             <div className="space-y-3">
               {selectedFiles.map((file) => {
+                const key = fileKey(file);
                 return (
                   <div
-                    key={file.name}
+                    key={key}
                     className="flex items-center justify-between p-4 bg-slate-50 rounded-lg"
                   >
-                    <div
-                      className="flex items-center
-                      space-x-4"
-                    >
+                    <div className="flex items-center space-x-4">
                       {getFileIcon(file.name)}
                       <div>
-                        <p
-                          className="font-medium
-                          text-slate-800"
-                        >
-                          {file.name}
-                        </p>
-                        <div className="flex-items-center space-x-4 text-sm text-slate-600">
-                          <span>
-                            {(file.size / (1024 * 1024)).toFixed(1)}MB
-                          </span>
+                        <p className="font-medium text-slate-800">{file.name}</p>
+                        <div className="flex items-center space-x-4 text-sm text-slate-600">
+                          <span>{formatFileSize(file.size)}</span>
                         </div>
                       </div>
                     </div>
                     <button
-                      onClick={() => removeSelected(file.name)}
+                      onClick={() => removeSelected(key)}
                       className="btn-danger btn-small"
+                      disabled={isUploading}
                     >
                       Remove
                     </button>
@@ -238,28 +233,29 @@ const UploadFiles = () => {
           {(files || []).length === 0 ? (
             <div className="text-center py-4">
               <FilePlus className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-500">No files Upload yet</p>
+              <p className="text-slate-500">No files uploaded yet</p>
             </div>
           ) : (
             <div className="space-y-3">
               {files.map((file) => (
                 <div
-                  key={file.id || file.fileUrl}
-                  className="flex items-center
-                    justify-between p-4 bg-slate-50
-                    rounded-lg"
+                  key={file._id || file.fileUrl}
+                  className="flex items-center justify-between p-4 bg-slate-50 rounded-lg"
                 >
-                  <div
-                    className="flex items-center
-                      space-x-4"
-                  >
-                    {getFileIcon(file.originalName)}// OriginalName fix
+                  <div className="flex items-center space-x-4">
+                    {getFileIcon(file.originalName)}
                     <div>
                       <p className="font-medium text-slate-800">
-                        {file.originalName} // OriginalName fix
+                        {file.originalName}
                       </p>
                       <div className="flex items-center space-x-4 text-sm text-slate-600">
                         <span>{file.fileType || "File"}</span>
+                        {file.size ? <span>{formatFileSize(file.size)}</span> : null}
+                        {file.uploadedAt && (
+                          <span>
+                            {new Date(file.uploadedAt).toLocaleDateString()}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

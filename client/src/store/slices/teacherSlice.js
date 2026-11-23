@@ -1,124 +1,128 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { axiosInstance } from "../../lib/axios";
+import {
+  axiosInstance,
+  getBlobErrorMessage,
+  getErrorMessage,
+} from "../../lib/axios";
 import { toast } from "react-toastify";
 
 export const getTeacherDashboardStats = createAsyncThunk(
-  "getTeacherDashboardStats",
+  "teacher/getDashboardStats",
   async (_, thunkAPI) => {
     try {
       const res = await axiosInstance.get("/teacher/fetch-dashboard-stats");
-      return res.data.data?.dashboardStats || res.data.data;
+      return res.data.data?.dashboardStats || null;
     } catch (error) {
-      const message =
-        error.response.data.message ||
-        "Failed to fetch teacher dashboard stats";
+      const message = getErrorMessage(
+        error,
+        "Failed to fetch teacher dashboard stats",
+      );
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response.data.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
 
+// The server always scopes requests to the logged-in teacher.
 export const getTeacherRequests = createAsyncThunk(
-  "getTeacherRequests",
-  async (supervisorId, thunkAPI) => {
+  "teacher/getRequests",
+  async (_, thunkAPI) => {
     try {
-      const res = await axiosInstance.get(
-        `/teacher/requests?supervisor=${supervisorId}`,
-      );
-      return res.data.data?.requests || res.data.data;
+      const res = await axiosInstance.get("/teacher/requests");
+      return res.data.data?.requests || [];
     } catch (error) {
-      const message =
-        error.response.data.message ||
-        "Failed to fetch teacher dashboard stats";
+      const message = getErrorMessage(error, "Failed to fetch requests");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response.data.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
 
 export const acceptRequest = createAsyncThunk(
-  "acceptRequest",
+  "teacher/acceptRequest",
   async (requestId, thunkAPI) => {
     try {
       const res = await axiosInstance.put(
         `/teacher/requests/${requestId}/accept`,
       );
-      return res.data.data?.request || res.data.data;
+      toast.success(res.data.message || "Request accepted successfully");
+      return res.data.data?.request;
     } catch (error) {
-      const message = error.response.data.message || "Failed to accept request";
+      const message = getErrorMessage(error, "Failed to accept request");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response.data.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
 
 export const rejectRequest = createAsyncThunk(
-  "rejectRequest",
+  "teacher/rejectRequest",
   async (requestId, thunkAPI) => {
     try {
       const res = await axiosInstance.put(
         `/teacher/requests/${requestId}/reject`,
       );
       toast.success(res.data.message || "Request rejected successfully");
-      return res.data.data?.request || res.data.data;
+      return res.data.data?.request;
     } catch (error) {
-      const message = error.response.data.message || "Failed to reject request";
+      const message = getErrorMessage(error, "Failed to reject request");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response.data.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
 
 export const markComplete = createAsyncThunk(
-  "markComplete",
+  "teacher/markComplete",
   async (projectId, thunkAPI) => {
     try {
       const res = await axiosInstance.post(
         `/teacher/mark-complete/${projectId}`,
       );
-      toast.success(res.data.message || "Mark Completed");
-      return { projectId };
+      toast.success(res.data.message || "Marked as completed");
+      return { projectId, project: res.data.data?.project };
     } catch (error) {
-      const message = error.response.data.message || "Failed to mark Complete";
+      const message = getErrorMessage(error, "Failed to mark complete");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response.data.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
 
 export const downloadTeacherFile = createAsyncThunk(
-  "downloadTeacherFile",
+  "teacher/downloadFile",
   async ({ projectId, fileId }, thunkAPI) => {
     try {
       const res = await axiosInstance.get(
         `/teacher/download/${projectId}/${fileId}`,
-        {
-          responseType: "blob",
-        },
+        { responseType: "blob", timeout: 0 },
       );
 
       return { blob: res.data, projectId, fileId };
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to download file");
-      return thunkAPI.rejectWithValue(error.response?.data?.message);
+      const message = await getBlobErrorMessage(error, "Failed to download file");
+      toast.error(message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
 
-export const getFiles = createAsyncThunk("getFiles", async (_, thunkAPI) => {
-  try {
-    const res = await axiosInstance.get(`/teacher/files`);
-    return res.data?.data?.files || res.data.data;
-  } catch (error) {
-    toast.error(
-      error.response?.data?.message || "Failed to fetch teacher files",
-    );
-    return thunkAPI.rejectWithValue(error.response?.data?.message);
-  }
-});
+export const getFiles = createAsyncThunk(
+  "teacher/getFiles",
+  async (_, thunkAPI) => {
+    try {
+      const res = await axiosInstance.get(`/teacher/files`);
+      return res.data?.data?.files || [];
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to fetch teacher files");
+      toast.error(message);
+      return thunkAPI.rejectWithValue(message);
+    }
+  },
+);
 
 export const addFeedback = createAsyncThunk(
-  "addFeedback",
+  "teacher/addFeedback",
   async ({ projectId, payload }, thunkAPI) => {
     try {
       const res = await axiosInstance.post(
@@ -128,28 +132,27 @@ export const addFeedback = createAsyncThunk(
       toast.success(res.data.message || "Feedback added successfully");
       return {
         projectId,
-        feedback: res.data.data?.feedback || res.data.data || res.data,
+        feedback: res.data.data?.feedback,
+        project: res.data.data?.project,
       };
     } catch (error) {
-      const message = error.response.data.message || "Failed to add Feedback";
+      const message = getErrorMessage(error, "Failed to add feedback");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response.data.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
 
 export const getAssignedStudents = createAsyncThunk(
-  "getAssignedStudents",
+  "teacher/getAssignedStudents",
   async (_, thunkAPI) => {
     try {
       const res = await axiosInstance.get(`/teacher/assigned-students`);
-      return res.data.data?.requests || res.data.data || res.data;
+      return res.data.data?.students || [];
     } catch (error) {
-      const message =
-        error.response.data.message ||
-        "Failed to fetch teacher dashboard stats";
+      const message = getErrorMessage(error, "Failed to fetch assigned students");
       toast.error(message);
-      return thunkAPI.rejectWithValue(error.response.data.message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -161,58 +164,72 @@ const teacherSlice = createSlice({
     files: [],
     pendingRequests: [],
     dashboardStats: null,
+    statsLoading: false,
     loading: false,
     error: null,
     list: [],
   },
   reducers: {},
   extraReducers: (builder) => {
-    builder.addCase(getAssignedStudents.pending, (state, action) => {
+    builder.addCase(getAssignedStudents.pending, (state) => {
       state.loading = true;
       state.error = null;
     });
     builder.addCase(getAssignedStudents.fulfilled, (state, action) => {
       state.loading = false;
-      state.assignedStudents = action.payload?.students || action.payload || [];
+      state.assignedStudents = action.payload || [];
     });
     builder.addCase(getAssignedStudents.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload || "Failed to fetch assigned students";
     });
     builder.addCase(addFeedback.fulfilled, (state, action) => {
-      const { projectId, feedback } = action.payload;
-      state.assignedStudents = state.assignedStudents.map((s) => {
-        return s.project?._id === projectId ? { ...s, feedback } : s;
-      });
+      const { projectId, project } = action.payload;
+      state.assignedStudents = state.assignedStudents.map((s) =>
+        s.project?._id === projectId && project
+          ? { ...s, project: { ...s.project, feedback: project.feedback } }
+          : s,
+      );
     });
     builder.addCase(markComplete.fulfilled, (state, action) => {
       const { projectId } = action.payload;
-      state.assignedStudents = state.assignedStudents.map((s) => {
-        if (s.project?._id === projectId) {
-          return { ...s, project: { ...s.project, status: "completed" } };
-        }
-        return s;
-      });
+      state.assignedStudents = state.assignedStudents.map((s) =>
+        s.project?._id === projectId
+          ? { ...s, project: { ...s.project, status: "completed" } }
+          : s,
+      );
     });
 
+    builder.addCase(getTeacherDashboardStats.pending, (state) => {
+      state.statsLoading = true;
+    });
     builder.addCase(getTeacherDashboardStats.fulfilled, (state, action) => {
+      state.statsLoading = false;
       state.dashboardStats = action.payload;
     });
+    builder.addCase(getTeacherDashboardStats.rejected, (state) => {
+      state.statsLoading = false;
+    });
     builder.addCase(getFiles.fulfilled, (state, action) => {
-      state.files = action.payload?.files || action.payload || [];
+      state.files = action.payload || [];
     });
     builder.addCase(getTeacherRequests.fulfilled, (state, action) => {
-      state.list = action.payload?.requests || action.payload;
+      state.list = action.payload || [];
     });
     builder.addCase(acceptRequest.fulfilled, (state, action) => {
-      const updatedRequest = action.payload;
+      const updated = action.payload;
+      if (!updated) return;
+      // Keep latestProject (not part of the accept response).
       state.list = state.list.map((r) =>
-        r._id === updatedRequest._id ? updatedRequest : r,
+        r._id === updated._id ? { ...r, status: updated.status } : r,
       );
     });
     builder.addCase(rejectRequest.fulfilled, (state, action) => {
-      const rejectedRequest = action.payload;
-      state.list = state.list.filter((r) => r._id !== rejectedRequest._id);
+      const updated = action.payload;
+      if (!updated) return;
+      state.list = state.list.map((r) =>
+        r._id === updated._id ? { ...r, status: updated.status } : r,
+      );
     });
   },
 });

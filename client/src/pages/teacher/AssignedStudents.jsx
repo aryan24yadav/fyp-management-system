@@ -15,6 +15,7 @@ const AssignedStudents = () => {
     type: "",
   });
   const [sortBy, setSortBy] = useState("name");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
 
@@ -31,20 +32,18 @@ const AssignedStudents = () => {
     switch (status) {
       case "completed":
         return "bg-green-100 text-green-700 border border-green-300";
-        break;
       case "approved":
         return "bg-blue-100 text-blue-700 border border-blue-300";
-        break;
-
+      case "rejected":
+        return "bg-red-100 text-red-700 border border-red-300";
       default:
         return "bg-yellow-100 text-yellow-700 border border-yellow-300";
     }
   };
 
-  const getstatusText = (status) => {
-    if (status === "completed") return "Completed";
-    if (status === "approved") return "Approved";
-    return "Pending";
+  const getStatusText = (status) => {
+    if (!status) return "No Project";
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   const handleFeedback = (student) => {
@@ -65,38 +64,44 @@ const AssignedStudents = () => {
     setShowCompleteModal(false);
   };
 
-  const submitFeedback = () => {
+  // Close the modal only when the request succeeded, so typed feedback is
+  // not lost on an error.
+  const submitFeedback = async () => {
     if (
-      selectedStudent?.project?._id &&
-      feedbackData.title &&
-      feedbackData.message
+      !selectedStudent?.project?._id ||
+      !feedbackData.title.trim() ||
+      !feedbackData.message.trim()
     ) {
-      dispatch(
-        addFeedback({
-          projectId: selectedStudent.project._id,
-          payload: feedbackData,
-        }),
-      );
-      closeModal();
+      return;
     }
+    setIsSubmitting(true);
+    const result = await dispatch(
+      addFeedback({
+        projectId: selectedStudent.project._id,
+        payload: feedbackData,
+      }),
+    );
+    setIsSubmitting(false);
+    if (addFeedback.fulfilled.match(result)) closeModal();
   };
 
-  const confirmMarkComplete = () => {
-    if (selectedStudent?.project?._id) {
-      dispatch(markComplete(selectedStudent?.project?._id));
-      closeModal();
-    }
+  const confirmMarkComplete = async () => {
+    if (!selectedStudent?.project?._id) return;
+    setIsSubmitting(true);
+    const result = await dispatch(markComplete(selectedStudent.project._id));
+    setIsSubmitting(false);
+    if (markComplete.fulfilled.match(result)) closeModal();
   };
 
   const sortedStudents = [...(assignedStudents || [])].sort((a, b) => {
     switch (sortBy) {
       case "name":
-        return a.name.localeCompare(b.name);
-        break;
+        return (a.name || "").localeCompare(b.name || "");
       case "lastActivity":
-        return new Date(b.project?.updatedAt) - new Date(a.project.updatedAt);
-        break;
-
+        return (
+          new Date(b.project?.updatedAt || 0) -
+          new Date(a.project?.updatedAt || 0)
+        );
       default:
         return 0;
     }
@@ -128,7 +133,7 @@ const AssignedStudents = () => {
     },
     {
       label: "Total Projects",
-      value: sortedStudents.length,
+      value: sortedStudents.filter((s) => !!s.project).length,
       bg: "bg-purple-50",
       text: "text-purple-700",
       sub: "text-purple-600",
@@ -157,6 +162,17 @@ const AssignedStudents = () => {
             <p className="card-subtitle">
               Manage the students assigned to you.
             </p>
+          </div>
+
+          <div className="flex justify-end mb-4">
+            <select
+              className="input w-48"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+            >
+              <option value="name">Sort by name</option>
+              <option value="lastActivity">Sort by last activity</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -189,7 +205,7 @@ const AssignedStudents = () => {
                     </span>
                   </div>
                   <div>
-                    <h3 className="font semibold text-slate-800">
+                    <h3 className="font-semibold text-slate-800">
                       {student.name}
                     </h3>
                     <p className="text-sm text-slate-600">{student.email}</p>
@@ -201,13 +217,13 @@ const AssignedStudents = () => {
                   className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(student.project?.status)}
             `}
                 >
-                  {getstatusText(student.project?.status)}
+                  {getStatusText(student.project?.status)}
                 </span>
               </div>
 
               <div className="mb-5">
                 <h4 className="font-medium text-slate-700 mb-1">
-                  {student.project.title || "No project title"}
+                  {student.project?.title || "No project yet"}
                 </h4>
                 <p className="text-xs text-slate-500">
                   Last Update:{" "}
@@ -221,18 +237,24 @@ const AssignedStudents = () => {
               <div className="flex gap-3">
                 <button
                   onClick={() => handleFeedback(student)}
+                  disabled={!student.project?._id}
                   className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white
-          text-sm rounded-lg hover:bg-blue-700 transition"
+          text-sm rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <MessageSquare className="w-4 h-4" /> Feedback
                 </button>
 
                 <button
                   onClick={() => handleMarkComplete(student)}
-                  disabled={student.project?.status === "completed"}
+                  disabled={student.project?.status !== "approved"}
+                  title={
+                    student.project?.status === "approved"
+                      ? ""
+                      : "Only approved projects can be marked complete"
+                  }
                   className={`flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg transition
           ${
-            student?.project?.status === "completed"
+            student.project?.status !== "approved"
               ? "opacity-50 cursor-not-allowed"
               : "hover:bg-green-700"
           }`}
@@ -253,7 +275,7 @@ const AssignedStudents = () => {
         {/*Feedback Modal*/}
         {showFeedbackModal && selectedStudent && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center x-50"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
             onClick={closeModal}
           >
             <div
@@ -312,9 +334,6 @@ const AssignedStudents = () => {
                         Last Updated:
                       </span>
                       <span className="ml-2 text-slate-800">
-                        {/* {new Date(selectedStudent.project?.updatedAt) || new Date()
-                    .toLocaleDateString()} */}{" "}
-                        // fix
                         {(selectedStudent.project?.updatedAt
                           ? new Date(selectedStudent.project.updatedAt)
                           : new Date()
@@ -332,13 +351,14 @@ const AssignedStudents = () => {
                       <input
                         type="text"
                         value={feedbackData.title}
+                        maxLength={200}
                         onChange={(e) =>
                           setFeedbackData({
                             ...feedbackData,
                             title: e.target.value,
                           })
                         }
-                        className="w-full px-3 py-2 border-slate-300 rounded-lg focus:ring-2
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2
                 focus:ring-blue-500 focus:border-transparent"
                         placeholder="Enter feedback title"
                       />
@@ -357,7 +377,7 @@ const AssignedStudents = () => {
                             type: e.target.value,
                           })
                         }
-                        className="w-full px-3 py-2 border-slate-300 rounded-lg focus:ring-2
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2
                 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="positive">Positive</option>
@@ -380,7 +400,8 @@ const AssignedStudents = () => {
                           })
                         }
                         rows={4}
-                        className="w-full px-3 py-2 border-slate-300 rounded-lg focus:ring-2
+                        maxLength={1000}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2
                 focus:ring-blue-500 focus:border-transparent"
                         placeholder="Enter your feedback message"
                       />
@@ -392,11 +413,15 @@ const AssignedStudents = () => {
                       Cancel
                     </button>
                     <button
-                      className="btn-primary"
+                      className="btn-primary disabled:opacity-50"
                       onClick={submitFeedback}
-                      disabled={!feedbackData.title || !feedbackData.message}
+                      disabled={
+                        isSubmitting ||
+                        !feedbackData.title.trim() ||
+                        !feedbackData.message.trim()
+                      }
                     >
-                      Submit Feedback
+                      {isSubmitting ? "Submitting..." : "Submit Feedback"}
                     </button>
                   </div>
                 </div>
@@ -406,9 +431,9 @@ const AssignedStudents = () => {
         )}
 
         {/* complete modal */}
-        {showFeedbackModal && selectedStudent && (
+        {showCompleteModal && selectedStudent && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex backdrop-blur-sm items-center justify-center x-50"
+            className="fixed inset-0 bg-black bg-opacity-50 flex backdrop-blur-sm items-center justify-center z-50"
             onClick={closeModal}
           >
             <div
@@ -458,8 +483,12 @@ const AssignedStudents = () => {
                   <button onClick={closeModal} className="btn-danger">
                     Cancel
                   </button>
-                  <button onClick={confirmMarkComplete} className="btn-primary">
-                    Mark as Completed
+                  <button
+                    onClick={confirmMarkComplete}
+                    className="btn-primary disabled:opacity-50"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Saving..." : "Mark as Completed"}
                   </button>
                 </div>
               </div>

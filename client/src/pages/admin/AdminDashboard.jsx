@@ -12,13 +12,13 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import AddStudent from "../../components/modal/AddStudent";
 import AddTeacher from "../../components/modal/AddTeacher";
-import { toast } from "react-toastify";
 import {
   getAllProjects,
   getDashBoardStats,
 } from "../../store/slices/adminSlice.js";
 import { getNotifications } from "../../store/slices/notificationSlice.js";
 import { downloadProjectFile } from "../../store/slices/projectSlice.js";
+import { downloadWithThunk } from "../../lib/download";
 import {
   toggleCreateStudentModal,
   toggleCreateTeacherModal,
@@ -40,7 +40,6 @@ const AdminDashboard = () => {
   );
 
   const { stats, projects } = useSelector((state) => state.admin);
-  // const { projects } = useSelector((state) => state.project);
   const notifications = useSelector((state) => state.notification.list);
 
   const dispatch = useDispatch();
@@ -88,22 +87,13 @@ const AdminDashboard = () => {
       (f.studentName || "").toLowerCase().includes(reportSearch.toLowerCase()),
   );
 
-  const handleDownload = async (projectId, fileId, name) => {
-    const res = await dispatch(downloadProjectFile({ projectId, fileId })).then(
-      (res) => {
-        const { blob } = res.payload;
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", name || "download");
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        link.parentNode.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      },
+  const handleDownload = (projectId, fileId, name) =>
+    downloadWithThunk(
+      dispatch,
+      downloadProjectFile,
+      { projectId, fileId },
+      name,
     );
-  };
 
   const supervisorsBucket = useMemo(() => {
     const map = new Map();
@@ -235,7 +225,9 @@ const AdminDashboard = () => {
         {/* HEADER */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white shadow-lg">
           <h1 className="text-2xl font-bold mb-2">Welcome, Admin</h1>
-          <p className="text-blue-100"></p>
+          <p className="text-blue-100">
+            Overview of students, teachers and projects
+          </p>
         </div>
 
         {/*Stats CARDS*/}
@@ -293,7 +285,7 @@ const AdminDashboard = () => {
                         dy={10}
                       />
                       <YAxis
-                        allowedDecimals={false}
+                        allowDecimals={false}
                         tick={{ fontSize: 12, fill: "#334155" }}
                         axisLine={{ stroke: "#CBD5E1" }}
                         tickLine={{ stroke: "#CBD5E1" }}
@@ -349,19 +341,19 @@ const AdminDashboard = () => {
                       )} rounded-full mr-3`}
                     />
                     <div className="flex-1">
-                      <p className="dont-medium text-slate-800">{n.message}</p>
+                      <p className="font-medium text-slate-800">{n.message}</p>
                       <div className="mt-1 flex items-center gap-2">
                         <span
-                          className={` px-2 py-0.5 rounded text-sm font-medium ${
-                            // getBadgeClasses("type", n.type) fix
-                            getBadgeClasses("priority", n.priority)
-                          } capitalize`}
+                          className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${getBadgeClasses(
+                            "type",
+                            n.type,
+                          )}`}
                         >
                           {n.type}
                         </span>
                         <span
-                          className={`px-px-2 py-0.5 rounded text-sm font-medium capitalize ${getBulletColor(
-                            n.type,
+                          className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${getBadgeClasses(
+                            "priority",
                             n.priority,
                           )}`}
                         >
@@ -433,10 +425,10 @@ const AdminDashboard = () => {
                 <div className="text-slate-500">No files Found</div>
               ) : (
                 <div className="space-y-2">
-                  {filteredFiles.map((f, i) => {
+                  {filteredFiles.map((f) => {
                     return (
                       <div
-                        key={i}
+                        key={`${f.projectId}-${f.fileId}`}
                         className="flex items-center justify-between p-3 bg-slate-50 rounded"
                       >
                         <div>

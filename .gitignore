@@ -1,4 +1,4 @@
-# # Dependencies
+# Dependencies
 node_modules/
 **/node_modules/
 
@@ -7,6 +7,11 @@ node_modules/
 .env.*
 **/local.env
 !.env.example
+!**/.env.example
+
+# Uploaded files (user data, never commit)
+server/uploads/
+server/temp/
 
 # Build files
 dist/

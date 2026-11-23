@@ -6,8 +6,9 @@ import { Users, Clock, CheckCircle, Loader, MoveDiagonal } from "lucide-react";
 const TeacherDashboard = () => {
   const dispatch = useDispatch();
 
-  const { dashboardStats, loading } = useSelector((state) => state.teacher);
-  const { authUser } = useSelector((state) => state.auth);
+  const { dashboardStats, statsLoading: loading } = useSelector(
+    (state) => state.teacher,
+  );
 
   useEffect(() => {
     dispatch(getTeacherDashboardStats());
@@ -16,7 +17,8 @@ const TeacherDashboard = () => {
   const statsCards = [
     {
       title: "Assigned Students",
-      value: authUser?.assignedStudents?.length || 0,
+      // From the API: authUser.assignedStudents was a stale login-time snapshot.
+      value: dashboardStats?.totalAssignedStudents || 0,
       loading,
       Icon: Users,
       bg: "bg-blue-100",
@@ -66,7 +68,7 @@ const TeacherDashboard = () => {
                         {title}
                       </p>
                       <p className={`text-sm font-medium text-slate-800`}>
-                        {loading ? "..." : value}
+                        {loading && !dashboardStats ? "..." : value}
                       </p>
                     </div>
                   </div>
@@ -79,11 +81,11 @@ const TeacherDashboard = () => {
         {/*RECENT ACTIVITY*/}
         <div className="card">
           <div className="card-header">
-            <h2 className="card-title">Recent Acticity</h2>
+            <h2 className="card-title">Recent Activity</h2>
             <p className="card-subtitle">Latest notifications and updates</p>
           </div>
           <div className="space-y-4">
-            {loading ? (
+            {loading && !dashboardStats ? (
               <Loader size={32} className="animate-spin" />
             ) : dashboardStats?.recentNotifications?.length > 0 ? (
               dashboardStats?.recentNotifications.map((notification) => {
@@ -92,7 +94,7 @@ const TeacherDashboard = () => {
                     key={notification._id}
                     className="flex items-center p-3 bg-slate-50 rounded-lg"
                   >
-                    <div className="p-2 bg-white rounded-lg to-slate-600">
+                    <div className="p-2 bg-white rounded-lg text-slate-600">
                       <MoveDiagonal className="w-5 h-5" />
                     </div>
 

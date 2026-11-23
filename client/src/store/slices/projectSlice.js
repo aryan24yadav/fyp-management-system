@@ -1,19 +1,21 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { axiosInstance } from "../../lib/axios";
+import { axiosInstance, getBlobErrorMessage } from "../../lib/axios";
 import { toast } from "react-toastify";
 
+/** Shared download endpoint (Admin, owner student or supervisor). */
 export const downloadProjectFile = createAsyncThunk(
-  "downloadProjectFile",
+  "project/downloadFile",
   async ({ projectId, fileId }, thunkAPI) => {
     try {
       const res = await axiosInstance.get(
         `/project/${projectId}/files/${fileId}/download`,
-        { responseType: "blob" },
+        { responseType: "blob", timeout: 0 },
       );
       return { blob: res.data, projectId, fileId };
     } catch (error) {
-      toast.error(error.response.data.message || "Failed to download file");
-      return thunkAPI.rejectWithValue(error.response.data.message);
+      const message = await getBlobErrorMessage(error, "Failed to download file");
+      toast.error(message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -25,7 +27,6 @@ const projectSlice = createSlice({
     selected: null,
   },
   reducers: {},
-  extraReducers: (builder) => {},
 });
 
 export default projectSlice.reducer;

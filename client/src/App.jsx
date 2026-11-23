@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { ToastContainer } from "react-toastify";
+import { Loader } from "lucide-react";
 
 // Auth Pages
 import LoginPage from "./pages/auth/LoginPage";
@@ -31,79 +34,69 @@ import AssignSupervisor from "./pages/admin/AssignSupervisor";
 import DeadlinesPage from "./pages/admin/DeadlinesPage";
 import ProjectsPage from "./pages/admin/ProjectsPage";
 import NotFound from "./pages/NotFound";
-import { useDispatch, useSelector } from "react-redux";
-import { ToastContainer } from "react-toastify";
-import { Loader } from "lucide-react";
 import { getUser } from "./store/slices/authSlice";
-import { getAllProjects, getAllUsers } from "./store/slices/adminSlice";
-import { fetchDashboardStats } from "./store/slices/studentSlice";
+import { getHomePath } from "./lib/routes";
+
+const FullScreenLoader = () => (
+  <div className="flex items-center justify-center h-screen">
+    <Loader className="animate-spin h-12 w-12 text-blue-500" />
+  </div>
+);
+
+/**
+ * Declared OUTSIDE App on purpose: a component defined inside another
+ * component is a new type on every render, so React unmounted and remounted
+ * the whole dashboard (losing all page state) whenever App re-rendered.
+ */
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { authUser, isCheckingAuth } = useSelector((state) => state.auth);
+
+  // Still verifying the session: don't redirect yet.
+  if (isCheckingAuth) return <FullScreenLoader />;
+  if (!authUser) return <Navigate to="/login" replace />;
+  if (allowedRoles && !allowedRoles.includes(authUser.role)) {
+    return <Navigate to={getHomePath(authUser.role)} replace />;
+  }
+  return children;
+};
+
+const HomeRedirect = () => {
+  const { authUser, isCheckingAuth } = useSelector((state) => state.auth);
+  if (isCheckingAuth) return <FullScreenLoader />;
+  return (
+    <Navigate to={authUser ? getHomePath(authUser.role) : "/login"} replace />
+  );
+};
 
 const App = () => {
   const { authUser, isCheckingAuth } = useSelector((state) => state.auth);
-
   const dispatch = useDispatch();
 
+  // Restore the session from the httpOnly cookie. Each page fetches its own
+  // data, so there is no role-specific prefetching here any more (it caused
+  // duplicate requests).
   useEffect(() => {
     dispatch(getUser());
   }, [dispatch]);
 
-  useEffect(() => {
-    if (authUser?.role === "Admin") {
-      dispatch(getAllUsers());
-      dispatch(getAllProjects());
-    }
-    if (authUser?.role === "Student") {
-      dispatch(fetchDashboardStats());
-    }
-  }, [authUser]);
-
-  const ProtectedRoute = ({ children, allowedRoles }) => {
-    // Still verifying session — don't redirect yet
-    if (isCheckingAuth)
-      return (
-        <div className="flex items-center justify-center h-screen">
-          <Loader className="animate-spin h-12 w-12 text-blue-500" />
-        </div>
-      );
-    if (!authUser) return <Navigate to="/login" replace />;
-    if (
-      allowedRoles &&
-      authUser?.role &&
-      !allowedRoles.includes(authUser.role)
-    ) {
-      const redirectPath =
-        authUser.role === "Admin"
-          ? "/admin"
-          : authUser.role === "Teacher"
-            ? "/teacher"
-            : "/student";
-      return <Navigate to={redirectPath} replace />;
-    }
-    return children;
-  };
-
   if (isCheckingAuth && !authUser) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader className="animate-spin h-12 w-12 text-blue-500" />
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   return (
     <BrowserRouter>
       <Routes>
-        {/*Auth Route */}
+        {/* Auth Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/*Student Routes */}
+        {/* Student Routes */}
         <Route
           path="/student"
           element={
             <ProtectedRoute allowedRoles={["Student"]}>
-              <DashboardLayout userRole={authUser?.role} />
+              <DashboardLayout userRole="Student" />
             </ProtectedRoute>
           }
         >
@@ -115,12 +108,12 @@ const App = () => {
           <Route path="notifications" element={<NotificationsPage />} />
         </Route>
 
-        {/*Teacher Routes */}
+        {/* Teacher Routes */}
         <Route
           path="/teacher"
           element={
             <ProtectedRoute allowedRoles={["Teacher"]}>
-              <DashboardLayout userRole={authUser?.role} />
+              <DashboardLayout userRole="Teacher" />
             </ProtectedRoute>
           }
         >
@@ -130,12 +123,12 @@ const App = () => {
           <Route path="files" element={<TeacherFiles />} />
         </Route>
 
-        {/*Admin Routes */}
+        {/* Admin Routes */}
         <Route
           path="/admin"
           element={
             <ProtectedRoute allowedRoles={["Admin"]}>
-              <DashboardLayout userRole={"Admin"} />
+              <DashboardLayout userRole="Admin" />
             </ProtectedRoute>
           }
         >
@@ -147,41 +140,8 @@ const App = () => {
           <Route path="projects" element={<ProjectsPage />} />
         </Route>
 
-        {/*Student Routes */}
-        <Route
-          path="/student"
-          element={
-            <ProtectedRoute allowedRoles={["Student"]}>
-              <DashboardLayout userRole={"Student"} />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<StudentDashboard />} />
-          <Route path="submit-proposal" element={<SubmitProposal />} />
-          <Route path="upload-files" element={<UploadFiles />} />
-          <Route path="supervisor" element={<SupervisorPage />} />
-          <Route path="feedback" element={<FeedbackPage />} />
-          <Route path="notifications" element={<NotificationsPage />} />
-          {/* <Route path="projects" element={<ProjectsPage/>}/> */}
-        </Route>
-
-        {/*Teacher Routes */}
-        <Route
-          path="/teacher"
-          element={
-            <ProtectedRoute allowedRoles={["Teacher"]}>
-              <DashboardLayout userRole={"Teacher"} />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<TeacherDashboard />} />
-          <Route path="pending-requests" element={<PendingRequests />} />
-          <Route path="assigned-students" element={<AssignedStudents />} />
-          <Route path="files" element={<TeacherFiles />} />
-          {/* <Route path="projects" element={<ProjectsPage/>}/> */}
-        </Route>
         {/* Default Redirect */}
-        <Route path="/" element={<Navigate to={"/login"} replace />} />
+        <Route path="/" element={<HomeRedirect />} />
 
         <Route
           path="/unauthorized"

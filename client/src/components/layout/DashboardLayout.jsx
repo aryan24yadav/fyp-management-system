@@ -35,13 +35,7 @@ const DashboardLayout = ({ userRole }) => {
         </main>
       </div>
 
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      {/* The mobile backdrop is rendered by <Sidebar /> (it was rendered twice). */}
     </div>
   );
 };

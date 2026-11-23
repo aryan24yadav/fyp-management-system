@@ -21,8 +21,14 @@ import {
 } from "lucide-react";
 const NotificationsPage = () => {
   const dispatch = useDispatch();
-  const notifications = useSelector((state) => state.notification.list);
-  const unreadCount = useSelector((state) => state.notification.unreadCount);
+  const {
+    list: notifications,
+    unreadCount,
+    readCount,
+    highPriorityMessages,
+    thisWeekNotifications,
+    loading,
+  } = useSelector((state) => state.notification);
 
   useEffect(() => {
     dispatch(getNotifications());
@@ -71,22 +77,22 @@ const NotificationsPage = () => {
     }
   };
 
+  // "border-1-red-500" is not a Tailwind class; use a coloured left border.
   const getPriorityColor = (priority) => {
     switch (priority) {
       case "high":
-        return "border-1-red-500";
-        break;
+        return "border-l-4 border-l-red-500";
       case "medium":
-        return "border-1-yellow-500";
-        break;
+        return "border-l-4 border-l-yellow-500";
       case "low":
-        return "border-1-green-500";
-        break;
+        return "border-l-4 border-l-green-500";
       default:
-        return "border-1-slate-300";
-        break;
+        return "border-l-4 border-l-slate-300";
     }
   };
+
+  const getTitle = (type = "general") =>
+    type.charAt(0).toUpperCase() + type.slice(1);
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
@@ -113,7 +119,7 @@ const NotificationsPage = () => {
   const stats = [
     {
       title: "Total",
-      value: notifications.length,
+      value: unreadCount + readCount,
       bg: "bg-blue-50",
       iconBg: "bg-blue-100",
       textColor: "text-blue-600",
@@ -133,7 +139,7 @@ const NotificationsPage = () => {
     },
     {
       title: "High Priority",
-      value: notifications.filter((n) => n.priority === "high").length,
+      value: highPriorityMessages,
       bg: "bg-yellow-50",
       iconBg: "bg-yellow-100",
       textColor: "text-yellow-600",
@@ -143,12 +149,7 @@ const NotificationsPage = () => {
     },
     {
       title: "This Week",
-      value: notifications.filter((n) => {
-        const notifDate = new Date(n.createdAt); // fix n.date
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        return notifDate >= weekAgo;
-      }).length,
+      value: thisWeekNotifications,
       bg: "bg-green-50",
       iconBg: "bg-green-100",
       textColor: "text-green-600",
@@ -217,17 +218,17 @@ const NotificationsPage = () => {
                   rounded-xl border p-4 transition-all ${
                     !notification.isRead
                       ? "bg-blue-50 border-blue-200"
-                      : "bg-white hover:bg-slate-50 hover:bg-slate-50"
+                      : "bg-white hover:bg-slate-50"
                   }
                   ${getPriorityColor(notification.priority)} `}
                 >
-                  <div className="flex-items-center space-x-4">
+                  <div className="flex items-start space-x-4 w-full">
                     <div className="flex-shrink-0 mt-1">
                       {getNotificationIcon(notification.type)}
                     </div>
 
-                    <div className="flex min-w-0">
-                      <div className="flex -tems-center justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-2">
                         <h3
                           className={`font-medium ${
                             !notification.isRead
@@ -235,9 +236,9 @@ const NotificationsPage = () => {
                               : "text-slate-700"
                           }`}
                         >
-                          {notification.title}{" "}
+                          {getTitle(notification.type)}
                           {!notification.isRead && (
-                            <span className="ml-2 w-2 h-2 bg-blue-50 rounded-full inline-block"></span>
+                            <span className="ml-2 w-2 h-2 bg-blue-500 rounded-full inline-block"></span>
                           )}
                         </h3>
 
@@ -292,7 +293,7 @@ const NotificationsPage = () => {
                             </button>
                           )}
                           <button
-                            className="text-sm text-blue-600 hover:text-blue-500"
+                            className="text-sm text-red-600 hover:text-red-500"
                             onClick={() =>
                               deleteNotificationHandler(notification._id)
                             }
@@ -308,7 +309,13 @@ const NotificationsPage = () => {
             })}
           </div>
 
-          {notifications.length === 0 && (
+          {loading && notifications.length === 0 && (
+            <div className="text-center py-8 text-slate-500">
+              Loading notifications...
+            </div>
+          )}
+
+          {!loading && notifications.length === 0 && (
             <div className="text-center py-8">
               <div className="flex items-center justify-center mb-3 text-slate-600">
                 <BellOff className="w-12 h-12" />

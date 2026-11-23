@@ -1,100 +1,3 @@
-// import { useState } from "react";
-// import { Link } from "react-router-dom";
-// import { useDispatch, useSelector } from "react-redux";
-// import { KeyRound } from "lucide-react";
-// import { Loader } from "lucide-react";
-// import { forgotPassword } from "../../store/slices/authSlice";
-// const ForgotPasswordPage = () => {
-//   const [email,setEmail] = useState("");
-//   const[isSubmitted,setSubmitted] = useState(false);
-//   const[error,setError] = useState({});
-//   const[isRequestingForToken] = useSelector((state)=>state.auth);
-
-//   const dispatch = useDispatch();
-
-//   const handleSubmit = async(e)=>{
-//     e.preventDefault();
-//     if (!email) {
-//       setError("Email is required");
-//       return;
-//     }
-
-//     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-//       setError("Email is invalid");
-//       return;
-//     }
-
-//     setError("");
-
-//     try{
-//       await dispatch(forgotPassword({email})).unwrap();
-//       setSubmitted(true);
-//     }catch(error){
-//       setError(error || "Failed to send reset link");
-//     }
-//   };
-
-//   if(isSubmitted){
-//     return(
-
-//         // please make html email link okk
-
-//     )
-//   }
-//   return <>
-//   <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-//     <div className="max-w-md w-full ">
-//       {/*Header*/}
-//       <div className="text-center mb-8">
-//         <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-500 text-white rounded-full mb-4">
-//           <KeyRound className="w-8 h-8 text-white"/>
-//         </div>
-//         <h1 className="text-2xl font-bold text-gray-800">Forgot Password</h1>
-//         <p className="text-gray-500">Enter your registered email address. We will send you a reset link.</p>
-//       </div>
-
-//       {/*Forgot Password Form*/}
-
-//       <div className="card">
-//         <form onSubmit={handleSubmit} className="space-y-6">
-//           {
-//             error && (
-//               <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-//                 <p className="text-sm text-red-500">{error}</p>
-//               </div>
-//             )
-//           }
-
-//           {/*Email Address*/}
-//           <div>
-//             <label className="label">Email Address</label>
-//             <input type="email" name="email" value={email} onChange={(e) => {
-//               setEmail(e.target.value);
-//               if(error) setError("");
-//             }} className={`input ${error && "input-error"}`} placeholder="Enter Your Email " disabled={isRequestingForToken}/>
-//             {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
-//           </div>
-
-//           {/* login button */}
-//           <button type="submit" className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={isRequestingForToken}>
-//             {isRequestingForToken ? (<div className="flex items-center justify-center gap-2"><Loader className="animate-spin -m1-1 mr-2 h-4 w-4 text-white"/>Sending...</div>) : "Send Reset Link"}
-//           </button>
-
-//         </form>
-//         <div className="text-center mt-6">
-//           <p className="text-sm text-gray-500">Remembered your password?
-//           <Link to="/login" className="text-sm text-blue-600 hover:text-blue-800">
-//             Sign in here
-//           </Link></p>
-//         </div>
-//       </div>
-//     </div>
-
-//   </div></>;
-// };
-
-// export default ForgotPasswordPage;
-
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -127,8 +30,8 @@ const ForgotPasswordPage = () => {
     try {
       await dispatch(forgotPassword(email)).unwrap();
       setSubmitted(true);
-    } catch (error) {
-      setError(error?.message || error || "Failed to send reset link");
+    } catch (err) {
+      setError(err?.message || err || "Failed to send reset link");
     }
   };
 
@@ -162,7 +65,7 @@ const ForgotPasswordPage = () => {
                   </p>
                   <p className="text-blue-800">
                     Click the reset link in the email we sent you. The link
-                    expires in 24 hours.
+                    expires in 15 minutes.
                   </p>
                 </div>
               </div>

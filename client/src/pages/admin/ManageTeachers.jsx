@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import Addstudent from "../../components/modal/AddTeacher";
 import {
   deleteTeacher,
   getAllUsers,
   updateTeacher,
 } from "../../store/slices/adminSlice";
+// Was missing: clicking "Add New Teacher" threw "toggleCreateTeacherModal is not defined".
+import { toggleCreateTeacherModal } from "../../store/slices/popupSlice";
 import {
   AlertTriangle,
   BadgeCheck,
-  CheckCircle,
   Plus,
   TriangleAlert,
   Users,
   X,
 } from "lucide-react";
 import AddTeacher from "../../components/modal/AddTeacher";
+import { departmentOptions } from "../../lib/constants";
 
 const ManageTeachers = () => {
   const { users } = useSelector((state) => state.admin);
@@ -36,6 +37,10 @@ const ManageTeachers = () => {
   });
 
   const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(getAllUsers());
+  }, [dispatch]);
 
   const teachers = useMemo(() => {
     return (users || []).filter((u) => u?.role?.toLowerCase() === "teacher");
@@ -69,12 +74,16 @@ const ManageTeachers = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingTeacher) {
-      dispatch(updateTeacher({ id: editingTeacher._id, data: formData }));
-    }
-    handleClosedModal();
+    if (!editingTeacher) return;
+    const result = await dispatch(
+      updateTeacher({
+        id: editingTeacher._id,
+        data: { ...formData, maxStudents: Number(formData.maxStudents) },
+      }),
+    );
+    if (updateTeacher.fulfilled.match(result)) handleClosedModal();
   };
 
   const handleEdit = (teacher) => {
@@ -82,10 +91,12 @@ const ManageTeachers = () => {
     setFormData({
       name: teacher.name,
       email: teacher.email,
-      department: teacher.department,
+      department: teacher.department || "Computer Science",
+      // Edit ALL expertise areas (comma separated); the old select kept only
+      // the first one and silently dropped the rest on save.
       experties: Array.isArray(teacher.experties)
-        ? teacher.experties[0]
-        : teacher.experties,
+        ? teacher.experties.join(", ")
+        : teacher.experties || "",
       maxStudents:
         typeof teacher.maxStudents === "number" ? teacher.maxStudents : 10,
     });
@@ -115,14 +126,14 @@ const ManageTeachers = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="card">
-          <div className="card header flex flex-col md:flex-row justify-between items-start md:items-center">
+          <div className="card-header flex flex-col md:flex-row justify-between items-start md:items-center">
             <div>
               <h1 className="card-title">Manage Teachers</h1>
               <p className="card-subtitle">Add,Edit and Manage your Teachers</p>
             </div>
 
             <button
-              onClick={() => dispatch(toggleCreateTeacherModal())} // fix dispatch(toggleTeacherModal())
+              onClick={() => dispatch(toggleCreateTeacherModal())}
               className="btn-primary flex items-center space-x-2 mt-4 md:mt-0 "
             >
               <Plus className="w-5 h-5" />
@@ -187,7 +198,7 @@ const ManageTeachers = () => {
         <div className="card">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
-              <label className="block text-sm font medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Search
               </label>
               <input
@@ -201,7 +212,7 @@ const ManageTeachers = () => {
 
             <div className="w-full md:w-48">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Filter Status
+                Filter Department
               </label>
               <select
                 value={filterDepartment}
@@ -240,12 +251,17 @@ const ManageTeachers = () => {
                     </th>
                     <th className="px-6 py-3 text-left text-xs">
                       <span className="text-xs font-bold uppercase tracking-wider">
-                        Join Date
+                        Expertise
                       </span>
                     </th>
                     <th className="px-6 py-3 text-left text-xs">
                       <span className="text-xs font-bold uppercase tracking-wider">
-                        Expertise
+                        Students
+                      </span>
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs">
+                      <span className="text-xs font-bold uppercase tracking-wider">
+                        Join Date
                       </span>
                     </th>
                     <th className="px-6 py-3 text-left text-xs">
@@ -271,20 +287,25 @@ const ManageTeachers = () => {
                           </div>
                         </td>
 
-                        <td className="px-6 py-4 white-space-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-slate-900">
                             {teacher.department || "-"}
                           </div>
                         </td>
 
-                        <td className="px-6 py-4 white-space-nowrap">
+                        <td className="px-6 py-4 text-sm">
                           {Array.isArray(teacher.experties)
                             ? teacher.experties.join(", ")
                             : teacher.experties}
                         </td>
 
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          {teacher.assignedStudents?.length || 0}/
+                          {teacher.maxStudents ?? "-"}
+                        </td>
+
                         <td className="px-6 py-4">
-                          <div className="text-sm text slate-900">
+                          <div className="text-sm text-slate-900">
                             {teacher.createdAt
                               ? new Date(teacher.createdAt).toLocaleDateString()
                               : "-"}
@@ -330,7 +351,7 @@ const ManageTeachers = () => {
                   </h3>
                   <button
                     onClick={handleClosedModal}
-                    className="text-slate-400 hover:to-slate-600"
+                    className="text-slate-400 hover:text-slate-600"
                   >
                     <X className="w-6 h-6" />
                   </button>
@@ -379,29 +400,28 @@ const ManageTeachers = () => {
                       required
                       className="input-field w-full py-1 border-b border-slate-600 focus:outline-none"
                     >
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Electronics">Electronics</option>
-                      <option value="Mechanical">Mechanical</option>
-                      <option value="IT">IT</option>
+                      {departmentOptions(formData.department).map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Experties
+                      Expertise (comma separated)
                     </label>
-                    <select
+                    <input
+                      type="text"
                       value={formData.experties}
                       onChange={(e) =>
                         setFormData({ ...formData, experties: e.target.value })
                       }
+                      placeholder="e.g. Machine Learning, Web Development"
                       required
-                    >
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Electronics">Electronics</option>
-                      <option value="Mechanical">Mechanical</option>
-                      <option value="IT">IT</option>
-                    </select>
+                      className="input-field w-full"
+                    />
                   </div>
 
                   <div>
@@ -410,8 +430,8 @@ const ManageTeachers = () => {
                     </label>
                     <input
                       type="number"
-                      max={10}
-                      min={1}
+                      max={50}
+                      min={Math.max(1, editingTeacher?.assignedStudents?.length || 0)}
                       value={formData.maxStudents}
                       onChange={(e) =>
                         setFormData({
@@ -446,7 +466,7 @@ const ManageTeachers = () => {
               <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
                 <div className="flex items-center mb-4 ">
                   <div
-                    className="flex-shrink-0 w-10 h-10 max-auto flex items-center justify-center
+                    className="flex-shrink-0 w-10 h-10 mx-auto flex items-center justify-center
                 rounded-full bg-red-100"
                   >
                     <AlertTriangle className="w-6 h-6 text-red-600" />

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
-  getTeacherDashboardStats,
   getTeacherRequests,
   acceptRequest,
   rejectRequest,
@@ -13,13 +12,11 @@ const PendingRequests = () => {
   const [loadingMap, setLoadingMap] = useState({});
   const dispatch = useDispatch();
   const { list } = useSelector((state) => state.teacher);
-  const { authUser } = useSelector((state) => state.auth);
 
+  // The server scopes requests to the logged-in teacher.
   useEffect(() => {
-    // fix
-    if (!authUser?._id) return;
-    dispatch(getTeacherRequests(authUser._id));
-  }, [dispatch, authUser._id]);
+    dispatch(getTeacherRequests());
+  }, [dispatch]);
 
   const setLoading = (id, key, value) => {
     setLoadingMap((prev) => ({
@@ -36,6 +33,11 @@ const PendingRequests = () => {
     setLoading(id, "accepting", true);
     try {
       await dispatch(acceptRequest(id)).unwrap();
+      // Accepting assigns the student and closes their other requests,
+      // so reload the list to show the new statuses.
+      dispatch(getTeacherRequests());
+    } catch {
+      // the thunk already shows an error toast
     } finally {
       setLoading(id, "accepting", false);
     }
@@ -46,13 +48,14 @@ const PendingRequests = () => {
     setLoading(id, "rejecting", true);
     try {
       await dispatch(rejectRequest(id)).unwrap();
+    } catch {
+      // the thunk already shows an error toast
     } finally {
       setLoading(id, "rejecting", false);
     }
   };
 
-  const filteredRequests =
-    list.filter((request) => {
+  const filteredRequests = (list || []).filter((request) => {
       const matchesSearch =
         (request?.student?.name || "")
           .toLowerCase()
@@ -63,7 +66,7 @@ const PendingRequests = () => {
       const matchesFilter =
         filterStatus === "all" || request.status === filterStatus;
       return matchesSearch && matchesFilter;
-    }) || [];
+    });
 
   return (
     <>
@@ -92,7 +95,7 @@ const PendingRequests = () => {
             >
               <option value="all">All Requests</option>
               <option value="pending">Pending</option>
-              <option value="accepted">Accepted</option>
+              <option value="approved">Accepted</option>
               <option value="rejected">Rejected</option>
             </select>
           </div>
@@ -100,6 +103,11 @@ const PendingRequests = () => {
 
         {/*REQUESTS*/}
         <div className="space-y-4">
+          {filteredRequests.length === 0 && (
+            <div className="card text-center py-8 text-slate-500">
+              No requests found
+            </div>
+          )}
           {filteredRequests.map((req) => {
             const id = req._id;
             const project = req.latestProject;
@@ -113,14 +121,14 @@ const PendingRequests = () => {
             let StatusMessage = "";
 
             if (projectStatus === "approved" && supervisorAssigned) {
-              bgClass = "bg-blue-50 vorder-blue-300";
+              bgClass = "bg-blue-50 border-blue-300";
               StatusMessage = "Supervision already assigned";
             } else if (projectStatus === "rejected") {
               bgClass = "bg-red-50 border-red-300";
-              StatusMessage = "Request Rejected";
+              StatusMessage = "Project proposal was rejected";
             } else if (projectStatus === "pending") {
               bgClass = "bg-yellow-50 border-yellow-300";
-              StatusMessage = "Pending";
+              StatusMessage = "Waiting for the admin to approve the project";
             }
 
             return (
@@ -136,13 +144,15 @@ const PendingRequests = () => {
                         className={`badge ${
                           req.status === "pending"
                             ? "badge-pending"
-                            : req.status === "accepted"
+                            : req.status === "approved"
                               ? "badge-approved"
                               : "badge-rejected"
                         }`}
                       >
-                        {req.status?.charAt(0).toUpperCase() +
-                          req.status?.slice(1)}
+                        {req.status === "approved"
+                          ? "Accepted"
+                          : (req.status || "").charAt(0).toUpperCase() +
+                            (req.status || "").slice(1)}
                       </span>
                     </div>
 
@@ -152,8 +162,13 @@ const PendingRequests = () => {
                     <h4 className="font-medium text-slate-700 mb-2">
                       {project?.title || "No project title"}
                     </h4>
+                    {req.message && (
+                      <p className="text-sm text-slate-600 mb-2 whitespace-pre-line">
+                        "{req.message}"
+                      </p>
+                    )}
                     <p className="text-xs text-slate-500">
-                      Submitted:{""}
+                      Submitted:{" "}
                       {req?.createdAt
                         ? new Date(req.createdAt).toLocaleDateString()
                         : "-"}
@@ -173,12 +188,12 @@ const PendingRequests = () => {
                       duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${
                         canAccept
                           ? "bg-green-600 hover:bg-green-700 text-white"
-                          : "bg-gray-300 text-gray-500 cursor-not allowed"
+                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
                       }`}
                         disabled={lm.accepting || !canAccept}
                         onClick={() => handleAccept(req)}
                       >
-                        {lm.accepting ? "Accepting" : "Accept"}
+                        {lm.accepting ? "Accepting..." : "Accept"}
                       </button>
                       <button
                         className={`px-4 py-1.5 text-sm rounded-lg font-medium transition-colors
@@ -187,7 +202,7 @@ const PendingRequests = () => {
                         disabled={lm.rejecting}
                         onClick={() => handleReject(req)}
                       >
-                        {lm.rejecting ? "Rejecting" : "Reject"}
+                        {lm.rejecting ? "Rejecting..." : "Reject"}
                       </button>
                     </div>
                   )}

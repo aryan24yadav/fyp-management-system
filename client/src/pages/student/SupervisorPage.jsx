@@ -18,6 +18,7 @@ const SupervisorPage = () => {
   const [selectedSupervisor, setSelectedSupervisor] = useState(null);
   const [requestMessage, setRequestMessage] = useState("");
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     dispatch(fetchProject());
@@ -57,24 +58,40 @@ const SupervisorPage = () => {
     setShowRequestModal(true);
   };
 
-  const submitRequest = () => {
-    if (!selectedSupervisor) return;
+  const closeRequestModal = () => {
+    setShowRequestModal(false);
+    setSelectedSupervisor(null);
+    setRequestMessage("");
+  };
+
+  const submitRequest = async () => {
+    if (!selectedSupervisor || isSending) return;
 
     const message =
       requestMessage.trim() ||
-      `${authUser.name || "A Student"} would like to request
-                    ${selectedSupervisor.name || "a supervisor"} as my supervisor`;
-    dispatch(
+      `${authUser?.name || "A student"} would like to request ${selectedSupervisor.name || "you"} as supervisor.`;
+
+    setIsSending(true);
+    const res = await dispatch(
       requestSupervisor({
         teacherId: selectedSupervisor._id,
         message,
       }),
-    ).then((res) => {
-      if (res.type === "student/requestSupervisor/fulfilled") {
-        setShowRequestModal(false);
-      }
-    });
+    );
+    setIsSending(false);
+    if (requestSupervisor.fulfilled.match(res)) {
+      closeRequestModal();
+    }
   };
+
+  const getInitials = (name = "") =>
+    name
+      .split(" ")
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?";
 
   return (
     <>
@@ -112,7 +129,7 @@ const SupervisorPage = () => {
                       <label className="text-sm font-medium text-slate-500 uppercase tracking-wide">
                         Email
                       </label>
-                      <p className="text-slate-800 font-mdium">
+                      <p className="text-slate-800 font-medium">
                         {supervisor?.email || "-"}
                       </p>
                     </div>
@@ -256,7 +273,7 @@ const SupervisorPage = () => {
                     <div className="flex items-center space-x-3 mb-3">
                       <div className="w-12 h-12 bg-slate-300 rounded-full flex items-center justify-center">
                         <span className="text-sm font-bold text-slate-600">
-                          {sup.name || "Anonymous"}
+                          {getInitials(sup.name)}
                         </span>
                       </div>
 
@@ -292,17 +309,30 @@ const SupervisorPage = () => {
                       </div>
                     </div>
 
+                    {typeof sup.assignedCount === "number" && (
+                      <p className="text-xs text-slate-500 mb-3">
+                        {sup.assignedCount}/{sup.maxStudents} students assigned
+                      </p>
+                    )}
+
                     <button
                       onClick={() => handleOpenRequest(sup)}
-                      disabled={hasSupervisor || !hasProject}
+                      disabled={
+                        hasSupervisor ||
+                        !hasProject ||
+                        project?.status === "rejected" ||
+                        sup.isFull
+                      }
                       title={
                         !hasProject
                           ? "Create a project first to request a supervisor"
-                          : ""
+                          : sup.isFull
+                            ? "This supervisor has no free slots"
+                            : ""
                       }
                       className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Request Supervisor
+                      {sup.isFull ? "No Slots Available" : "Request Supervisor"}
                     </button>
                   </div>
                 ))}
@@ -322,11 +352,7 @@ const SupervisorPage = () => {
                   </h3>
                   <button
                     className="text-slate-400 hover:text-slate-600"
-                    onClick={() => {
-                      setShowRequestModal(false);
-                      setSelectedSupervisor(null);
-                      setRequestMessage("");
-                    }}
+                    onClick={closeRequestModal}
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -342,6 +368,7 @@ const SupervisorPage = () => {
                     <label className="label">Message to Supervisor</label>
                     <textarea
                       className="input min-h-[120px]"
+                      maxLength={1000}
                       required
                       value={requestMessage}
                       onChange={(e) => setRequestMessage(e.target.value)}
@@ -350,23 +377,16 @@ const SupervisorPage = () => {
                   </div>
 
                   <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                    <button
-                      onClick={() => {
-                        setRequestMessage("");
-                        setShowRequestModal(false);
-                        setSelectedSupervisor(null);
-                      }}
-                      className="btn-outline"
-                    >
+                    <button onClick={closeRequestModal} className="btn-outline">
                       Cancel
                     </button>
 
                     <button
                       onClick={submitRequest}
-                      disabled={!requestMessage.trim()}
-                      className="btn-primary"
+                      disabled={!requestMessage.trim() || isSending}
+                      className="btn-primary disabled:opacity-50"
                     >
-                      Send Request
+                      {isSending ? "Sending..." : "Send Request"}
                     </button>
                   </div>
                 </div>

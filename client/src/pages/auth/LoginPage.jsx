@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { BookOpen, Loader2 } from "lucide-react";
 import { login } from "../../store/slices/authSlice";
+import { getHomePath } from "../../lib/routes";
 
 const LoginPage = () => {
   const dispatch = useDispatch();
@@ -48,41 +49,23 @@ const LoginPage = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const data = new FormData();
-    data.append("email", formData.email);
-    data.append("password", formData.password);
-    data.append("role", formData.role);
-
-    // fix
-    // dispatch(login(data));
     dispatch(
       login({
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.password,
         role: formData.role,
       }),
     );
   };
 
+  // Redirect by the role of the account that is actually logged in (the
+  // old code used the dropdown value, which is wrong when the session was
+  // restored from the cookie).
   useEffect(() => {
     if (authUser) {
-      switch (formData.role) {
-        case "Student":
-          navigate("/student");
-          break;
-        case "Teacher":
-          navigate("/teacher");
-          break;
-        case "Admin":
-          navigate("/admin");
-          break;
-
-        default:
-          navigate("/login");
-          break;
-      }
+      navigate(getHomePath(authUser.role), { replace: true });
     }
-  }, [authUser]);
+  }, [authUser, navigate]);
 
   return (
     <>
@@ -177,7 +160,7 @@ const LoginPage = () => {
               >
                 {isLoggingIn ? (
                   <div className="flex items-center justify-center gap-2">
-                    <Loader2 className="animate-spin -m1-1 mr-2 h-4 w-4 text-white" />
+                    <Loader2 className="animate-spin mr-2 h-4 w-4 text-white" />
                     Signing in...
                   </div>
                 ) : (

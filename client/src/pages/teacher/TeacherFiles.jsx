@@ -10,57 +10,60 @@ import {
   File,
 } from "lucide-react";
 import { getFiles, downloadTeacherFile } from "../../store/slices/teacherSlice";
+import { downloadWithThunk, formatFileSize } from "../../lib/download";
+
+const EMPTY = [];
+
+const deriveTypeFormatName = (name) => {
+  if (!name) return "other";
+  const parts = name.split(".");
+  return (parts[parts.length - 1] || "").toLowerCase();
+};
+
+const normalizeFile = (f) => {
+  const type = deriveTypeFormatName(f.originalName) || f.fileType || "other";
+  let category = "other";
+
+  if (["pdf", "doc", "docx", "txt"].includes(type)) {
+    category = "report";
+  } else if (["ppt", "pptx"].includes(type)) {
+    category = "presentation";
+  } else if (["jpg", "jpeg", "png", "gif", "avif"].includes(type)) {
+    category = "image";
+  } else if (
+    ["zip", "rar", "7z", "tar", "gz", "tgz", "js", "ts", "html", "css", "json"].includes(type)
+  ) {
+    category = "code";
+  }
+
+  return {
+    id: f._id,
+    name: f.originalName,
+    type: type.toUpperCase(),
+    size: formatFileSize(f.size),
+    student: f.studentName || "-",
+    // The API field is `uploadedAt` (uploadDate never existed, so every
+    // file showed today's date).
+    uploadDate: f.uploadedAt || null,
+    category,
+    projectId: f.projectId || f.project?._id,
+    fileId: f._id,
+  };
+};
+
 const TeacherFiles = () => {
   const [viewMode, setViewMode] = useState("grid");
   const [filterType, setFilterType] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
   const dispatch = useDispatch();
-  const filesFromStore = useSelector((state) => state.teacher.files) || [];
+  const filesFromStore = useSelector((state) => state.teacher.files) || EMPTY;
 
   useEffect(() => {
     dispatch(getFiles());
   }, [dispatch]);
 
-  const deriveTypeFormatName = (name) => {
-    if (!name) return "other";
-    const parts = name.split(".");
-    return (parts[parts.length - 1] || "").toLowerCase();
-  };
-
-  const normalizeFile = (f) => {
-    const type = deriveTypeFormatName(f.originalName) || f.fileType || "other";
-    let category = "other";
-
-    if (["pdf", "doc", "docx", "txt"].includes(type)) {
-      category = "report";
-    } else if (["ppt", "pptx"].includes(type)) {
-      category = "presentation";
-    } else if (["jpg", "jpeg", "png", "gif", "avif"].includes(type)) {
-      category = "image";
-    } else if (
-      ["zip", "rar", "7z", "js", "ts", "html", "css", "json"].includes(type)
-    ) {
-      category = "code";
-    }
-
-    return {
-      id: f._id,
-      name: f.originalName,
-      type: type.toUpperCase(),
-      size: f.size || "-",
-      student: f.studentName || "-",
-      uploadDate: f.uploadDate || f.createdAt || new Date().toISOString(),
-      category,
-      projectId: f.projectId || f.project?._id,
-      fileId: f._id,
-    };
-  };
-
-  const files = useMemo(
-    () => (filesFromStore || []).map(normalizeFile),
-    [filesFromStore],
-  );
+  const files = useMemo(() => filesFromStore.map(normalizeFile), [filesFromStore]);
 
   const getFileIcon = (type) => {
     switch (type.toLowerCase()) {
@@ -95,22 +98,18 @@ const TeacherFiles = () => {
     return matchesSearch && matchesType;
   });
 
-  const handleDownloadFile = async (file) => {
-    const res = await dispatch(
-      downloadTeacherFile({ projectId: file.projectId, fileId: file._id }),
-    ).then((res) => {
-      const { blob } = res.payload;
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", file.name || "download");
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    });
-  };
+  // Normalized files have `fileId`, not `_id`: the old code sent
+  // fileId=undefined, so every teacher download failed with 404.
+  const handleDownloadFile = (file) =>
+    downloadWithThunk(
+      dispatch,
+      downloadTeacherFile,
+      { projectId: file.projectId, fileId: file.fileId },
+      file.name,
+    );
+
+  const formatDate = (value) =>
+    value ? new Date(value).toLocaleDateString() : "-";
 
   const fileStats = [
     {
@@ -166,11 +165,11 @@ const TeacherFiles = () => {
           <div className="card-header">
             <div className="flex justify-between items-center">
               <h1 className="card-title">Student Files</h1>
-              <p className="card-subtitle">Manage the uploaded files.</p>
+              <p className="card-subtitle">Files uploaded by your students.</p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flow-row justify-between items-center gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
             <div className="flex items-center gap-4">
               <select
                 className="input w-48"
@@ -233,7 +232,11 @@ const TeacherFiles = () => {
         </div>
 
         {/* FILES DISPLAY */}
-        {viewMode === "grid" ? (
+        {filteredFiles.length === 0 ? (
+          <div className="card text-center py-8 text-slate-500">
+            No files found
+          </div>
+        ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredFiles.map((file) => (
               <div key={file.id} className="card">
@@ -248,7 +251,7 @@ const TeacherFiles = () => {
                   <p className="text-sm text-slate-600 mb-1">{file.student}</p>
                   <p className="text-xs text-slate-500 mb-1">{file.size}</p>
                   <p className="text-xs text-slate-500 mb-4">
-                    {new Date(file.uploadDate).toLocaleDateString()}
+                    {formatDate(file.uploadDate)}
                   </p>
 
                   <div className="flex gap-2 w-full">
@@ -272,7 +275,9 @@ const TeacherFiles = () => {
                 <tr>
                   {tableHeadData.map((t) => {
                     return (
-                      <th className="py-3 px-4 text-left font-semibold">{t}</th>
+                      <th key={t} className="py-3 px-4 text-left font-semibold">
+                        {t}
+                      </th>
                     );
                   })}
                 </tr>
@@ -285,15 +290,15 @@ const TeacherFiles = () => {
                       key={file.id}
                       className="border-t hover:bg-slate-50 transition-colors"
                     >
-                      <td className="py-3 px-4 items-center gap-3">
-                        {getFileIcon(file.type)}{" "}
-                        <span className="font-medium">{file.name}</span>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          {getFileIcon(file.type)}
+                          <span className="font-medium">{file.name}</span>
+                        </div>
                       </td>
                       <td className="py-3 px-4">{file.student}</td>
                       <td className="py-3 px-4">{file.type}</td>
-                      <td className="py-3 px-4">
-                        {new Date(file.uploadedAt).toLocaleDateString()}
-                      </td>
+                      <td className="py-3 px-4">{formatDate(file.uploadDate)}</td>
                       <td className="py-3 px-4">
                         <button
                           className="btn-primary btn-small"

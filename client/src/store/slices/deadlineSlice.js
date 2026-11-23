@@ -1,20 +1,22 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { axiosInstance } from "../../lib/axios";
+import { axiosInstance, getErrorMessage } from "../../lib/axios";
 import { toast } from "react-toastify";
 
+/** Creates or updates the deadline of a project. Returns { deadline, project }. */
 export const createDeadline = createAsyncThunk(
-  "createDeadline",
+  "deadline/createDeadline",
   async ({ id, data }, thunkAPI) => {
     try {
       const res = await axiosInstance.post(
         `/deadline/create-deadline/${id}`,
         data,
       );
-      toast.success(res.data.message || "Deadline updated");
-      return res.data.data?.deadline || res.data.data || res.data;
+      toast.success(res.data.message || "Deadline saved");
+      return res.data.data || {};
     } catch (error) {
-      toast.error(error.response.data.message || "Failed to update deadline");
-      return thunkAPI.rejectWithValue(error.response.data.message);
+      const message = getErrorMessage(error, "Failed to save deadline");
+      toast.error(message);
+      return thunkAPI.rejectWithValue(message);
     }
   },
 );
@@ -30,9 +32,19 @@ const deadlineSlice = createSlice({
   },
   reducers: {},
   extraReducers: (builder) => {
+    builder.addCase(createDeadline.pending, (state) => {
+      state.loading = true;
+    });
     builder.addCase(createDeadline.fulfilled, (state, action) => {
-      const item = action.payload;
-      if (item) state.deadlines.push(item);
+      state.loading = false;
+      const item = action.payload?.deadline;
+      if (!item) return;
+      const index = state.deadlines.findIndex((d) => d._id === item._id);
+      if (index === -1) state.deadlines.push(item);
+      else state.deadlines[index] = item;
+    });
+    builder.addCase(createDeadline.rejected, (state) => {
+      state.loading = false;
     });
   },
 });
