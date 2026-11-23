@@ -3,36 +3,32 @@ import * as fileServices from "../services/fileServices.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import ErrorHandler from "../middlewares/error.js";
 
-export const getAllProjects = asyncHandler(async (req, res, next) => {
+export const getAllProjects = asyncHandler(async (req, res) => {
   const projects = await projectServices.getAllProjects();
-  res.json({
+  res.status(200).json({
     success: true,
     message: "Projects fetched successfully",
     data: { projects },
   });
 });
 
+/** Shared download endpoint: Admin, the project's student or its supervisor. */
 export const downloadFile = asyncHandler(async (req, res, next) => {
   const { projectId, fileId } = req.params;
   const user = req.user;
 
   const project = await projectServices.getProjectById(projectId);
 
-  if (!project) {
-    return next(new ErrorHandler("Project not Found", 404));
-  }
-
-  const userRole = (user.role || "").toLowerCase();
-  const userId = user._id?.toString() || user.id;
+  const userId = user._id.toString();
   const hasAccess =
-    userRole === "admin" ||
-    project.student._id.toString() === userId ||
-    (project.supervisor && project.supervisor._id.toString() === userId);
+    user.role === "Admin" ||
+    project.student?._id.toString() === userId ||
+    project.supervisor?._id.toString() === userId;
 
   if (!hasAccess) {
     return next(
       new ErrorHandler(
-        "not authorised to download files from this project",
+        "Not authorized to download files from this project",
         403,
       ),
     );
@@ -44,5 +40,5 @@ export const downloadFile = asyncHandler(async (req, res, next) => {
     return next(new ErrorHandler("File not found", 404));
   }
 
-  fileServices.streamDownload(file.fileUrl, res, file.originalName);
+  fileServices.streamDownload(file.fileUrl, res, file.originalName, next);
 });

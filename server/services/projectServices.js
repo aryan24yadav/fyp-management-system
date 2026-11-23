@@ -1,14 +1,13 @@
 import { Project } from "../models/project.js";
 import ErrorHandler from "../middlewares/error.js";
+import { toStoredPath } from "./fileServices.js";
 
 export const getProjectByStudentId = async (studentId) => {
   return await Project.findOne({ student: studentId }).sort({ createdAt: -1 });
 };
 
 export const createProject = async (projectData) => {
-  const project = new Project(projectData);
-  await project.save();
-  return project;
+  return await Project.create(projectData);
 };
 
 export const getProjectById = async (id) => {
@@ -25,8 +24,6 @@ export const getProjectById = async (id) => {
 };
 
 export const addFilesToProject = async (projectId, files) => {
-  // fix
-  // const project = await findById(projectId);
   const project = await Project.findById(projectId);
   if (!project) {
     throw new ErrorHandler("Project not found", 404);
@@ -34,8 +31,9 @@ export const addFilesToProject = async (projectId, files) => {
 
   const fileMetaData = files.map((file) => ({
     originalName: file.originalname,
-    fileUrl: file.path,
+    fileUrl: toStoredPath(file.path), // portable relative path
     fileType: file.mimetype,
+    size: file.size,
     uploadedAt: new Date(),
   }));
 
@@ -44,19 +42,18 @@ export const addFilesToProject = async (projectId, files) => {
   return project;
 };
 
-export const getAllProjects = async () => {
-  const projects = await Project.find()
-    .populate("student", "name email")
-    .populate("supervisor", "name email")
+export const getAllProjects = async (filters = {}) => {
+  return await Project.find(filters)
+    .populate("student", "name email department")
+    .populate("supervisor", "name email department")
     .sort({ createdAt: -1 });
-  return projects;
 };
 
 export const markComplete = async (projectId) => {
   const project = await Project.findByIdAndUpdate(
     projectId,
-    { status: "completed" }, // fix complete -> completed
-    { new: true, runValidators: true },
+    { status: "completed" },
+    { returnDocument: "after", runValidators: true },
   )
     .populate("student", "name email")
     .populate("supervisor", "name email");
@@ -94,16 +91,17 @@ export const addFeedback = async (
 };
 
 export const getProjectsBySupervisor = async (supervisorId) => {
+  // Previously the filter was silently ignored and ALL projects were returned.
   return await getAllProjects({ supervisor: supervisorId });
 };
 
 export const updateProject = async (id, updatedData) => {
   const project = await Project.findByIdAndUpdate(id, updatedData, {
-    new: true,
+    returnDocument: "after",
     runValidators: true,
   })
-    .populate("student", "name email")
-    .populate("supervisor", "name email");
+    .populate("student", "name email department")
+    .populate("supervisor", "name email department");
 
   if (!project) {
     throw new ErrorHandler("Project not found", 404);

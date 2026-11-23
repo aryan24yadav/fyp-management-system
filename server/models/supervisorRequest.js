@@ -29,10 +29,16 @@ const supervisorRequestSchema = new mongoose.Schema(
   },
 );
 
-// Indexing foe better query performance
-supervisorRequestSchema.index({ student: 1 });
-supervisorRequestSchema.index({ supervisor: 1 });
+// Indexes for better query performance
+supervisorRequestSchema.index({ student: 1, status: 1 });
+supervisorRequestSchema.index({ supervisor: 1, status: 1 });
 supervisorRequestSchema.index({ status: 1 });
+// A student can have at most ONE pending request per supervisor. Enforced by
+// the database so two simultaneous clicks cannot create duplicates.
+supervisorRequestSchema.index(
+  { student: 1, supervisor: 1 },
+  { unique: true, partialFilterExpression: { status: "pending" } },
+);
 
 export const SupervisorRequest =
   mongoose.models.SupervisorRequest ||

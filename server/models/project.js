@@ -10,6 +10,7 @@ const feedbackSchema = new mongoose.Schema(
     message: {
       type: String,
       required: true,
+      trim: true,
       maxlength: [1000, "Feedback cannot exceed 1000 characters"],
     },
     type: {
@@ -20,10 +21,13 @@ const feedbackSchema = new mongoose.Schema(
     title: {
       type: String,
       required: true,
+      trim: true,
+      maxlength: [200, "Feedback title cannot exceed 200 characters"],
     },
   },
   { timestamps: true },
 );
+
 const projectSchema = new mongoose.Schema(
   {
     student: {
@@ -48,14 +52,6 @@ const projectSchema = new mongoose.Schema(
       enum: ["pending", "approved", "rejected", "completed"],
       default: "pending",
     },
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
-    },
     supervisor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -67,6 +63,8 @@ const projectSchema = new mongoose.Schema(
           type: String,
           required: true,
         },
+        // Path relative to the server folder, e.g. "uploads/projects/<id>/<file>"
+        // (older records may contain an absolute path; see fileServices).
         fileUrl: {
           type: String,
           required: true,
@@ -74,6 +72,10 @@ const projectSchema = new mongoose.Schema(
         fileType: {
           type: String,
           required: true,
+        },
+        size: {
+          type: Number,
+          default: 0,
         },
         uploadedAt: {
           type: Date,
@@ -87,12 +89,13 @@ const projectSchema = new mongoose.Schema(
     },
   },
   {
+    // createdAt / updatedAt are managed automatically.
     timestamps: true,
   },
 );
 
-// Indexing foe better query performance
-projectSchema.index({ student: 1 });
+// Indexes for the most common queries
+projectSchema.index({ student: 1, createdAt: -1 });
 projectSchema.index({ supervisor: 1 });
 projectSchema.index({ status: 1 });
 

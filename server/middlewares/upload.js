@@ -1,104 +1,100 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
-import { error } from "console";
+import ErrorHandler from "./error.js";
+import { UPLOAD_ROOT } from "../config/paths.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const ensureDirExists = (dir) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-};
+const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    let uploadPath;
-
-    if (req.route.path.includes("/upload/:projectId")) {
-      uploadPath = path.join(
-        __dirname,
-        "../uploads/projects",
-        req.params.projectId,
-      );
-    } else if (req.route.path.includes("/upload/:userId")) {
-      uploadPath = path.join(__dirname, "../uploads/users", req.params.userId);
-    } else {
-      uploadPath = path.join(__dirname, "../uploads/temp");
+    const { projectId } = req.params;
+    // projectId comes from the URL. Only a strict 24-hex id is accepted, so it
+    // can never contain "../" and write outside the uploads folder.
+    if (!OBJECT_ID_PATTERN.test(projectId || "")) {
+      return cb(new ErrorHandler("Invalid project id", 400));
     }
 
-    ensureDirExists(uploadPath);
+    const uploadPath = path.join(UPLOAD_ROOT, "projects", projectId);
+    fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
 
   filename: (req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
   },
 });
 
+const allowedTypes = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/x-rar-compressed",
+  "application/x-rar",
+  "application/vnd.rar",
+  "application/x-tar",
+  "application/gzip",
+  "application/x-gzip",
+  "application/x-7z-compressed",
+  "application/octet-stream",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "text/plain",
+  "application/javascript",
+  "text/javascript",
+  "text/css",
+  "text/html",
+  "application/json",
+];
+
+const allowedExtensions = [
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".ppt",
+  ".pptx",
+  ".zip",
+  ".rar",
+  ".tar",
+  ".gz",
+  ".tgz",
+  ".7z",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".txt",
+  ".js",
+  ".css",
+  ".html",
+  ".json",
+];
+
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = [
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/zip",
-    "application/x-zip-compressed",
-    "application/x-rar-compressed",
-    "application/x-rar",
-    "application/vnd.rar",
-    "application/octet-stream",
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "text/plain",
-    "application/javascript",
-    "text/css",
-    "text/html",
-    "application/json",
-  ];
-
-  const allowedExtensions = [
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".ppt",
-    ".pptx",
-    ".zip",
-    ".rar",
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".txt",
-    ".js",
-    ".css",
-    ".html",
-    ".json",
-  ];
-
   const fileExt = path.extname(file.originalname).toLowerCase();
 
-  if (
-    allowedTypes.includes(file.mimetype) &&
-    allowedExtensions.includes(fileExt)
-  ) {
+  if (allowedTypes.includes(file.mimetype) && allowedExtensions.includes(fileExt)) {
     cb(null, true);
   } else {
     cb(
-      new Error(`Invalid file type. Allowed: ${allowedExtensions.join(", ")}`),
+      new ErrorHandler(
+        `Invalid file type. Allowed: ${allowedExtensions.join(", ")}`,
+        400,
+      ),
       false,
     );
   }
 };
 
 const upload = multer({
-  storage: storage,
+  storage,
   fileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10 MB
@@ -106,71 +102,21 @@ const upload = multer({
   },
 });
 
+/**
+ * Turns multer errors into 400 responses with a `message` field (the
+ * frontend reads `message`). Before, file-type errors fell through as 500 and
+ * size/count errors used an `error` field the UI never displayed.
+ */
 const handleUploadError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({
-        success: false,
-        error: "File size limit exceeded. Maximum file size is 10MB.",
-      });
-    }
-
-    if (err.code === "LIMIT_FILE_COUNT") {
-      return res.status(400).json({
-        success: false,
-        error: "Too many files uploaded. Maximum is 10 files.",
-      });
-    }
-
-    if (err.message && err.message.includes("Invalid file type")) {
-      return res.status(400).json({
-        success: false,
-        error: err.message,
-      });
-    }
+    const messages = {
+      LIMIT_FILE_SIZE: "File size limit exceeded. Maximum file size is 10MB.",
+      LIMIT_FILE_COUNT: "Too many files uploaded. Maximum is 10 files.",
+      LIMIT_UNEXPECTED_FILE: "Unexpected file field. Use the 'files' field.",
+    };
+    return next(new ErrorHandler(messages[err.code] || err.message, 400));
   }
-
   next(err);
 };
 
 export { upload, handleUploadError };
-
-// // Allowed MIME types for project file uploads
-// export const allowedFileTypes = [
-//     "application/pdf",
-//     "application/msword",                                                      // .doc
-//     "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
-//     "application/vnd.ms-powerpoint",                                           // .ppt
-//     "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
-//     "image/jpeg",
-//     "image/png",
-//     "image/gif",
-//     "text/plain",
-//     "application/zip",
-// ];
-
-// // Use memory storage so files are available as buffers in req.files
-// // (swap to diskStorage if you want to save locally instead)
-// const storage = multer.memoryStorage();
-
-// const fileFilter = (req, file, cb) => {
-//     if (allowedFileTypes.includes(file.mimetype)) {
-//         cb(null, true);
-//     } else {
-//         cb(
-//             new Error(
-//                 `File type not allowed. Allowed types: PDF, DOC, DOCX, PPT, PPTX, JPEG, PNG, GIF, TXT, ZIP`
-//             ),
-//             false
-//         );
-//     }
-// };
-
-// export const upload = multer({
-//     storage,
-//     fileFilter,
-//     limits: {
-//         fileSize: 10 * 1024 * 1024, // 10 MB per file
-//         files: 10,                   // max 10 files per request
-//     },
-// });

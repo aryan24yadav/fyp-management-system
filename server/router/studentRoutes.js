@@ -15,6 +15,7 @@ import {
   isAuthorized,
 } from "../middlewares/authMiddleware.js";
 import { upload, handleUploadError } from "../middlewares/upload.js";
+import { authorizeProjectUpload } from "../middlewares/projectAccess.js";
 
 const router = express.Router();
 
@@ -36,6 +37,7 @@ router.post(
   "/upload/:projectId",
   isAuthenticated,
   isAuthorized("Student"),
+  authorizeProjectUpload, // ownership check BEFORE any file touches the disk
   upload.array("files", 10),
   handleUploadError,
   uploadFiles,

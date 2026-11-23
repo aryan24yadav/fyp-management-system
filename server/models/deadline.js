@@ -28,7 +28,7 @@ const deadlineSchema = new mongoose.Schema(
   },
 );
 
-// Indexing foe better query performance
+// Indexes for better query performance
 deadlineSchema.index({ dueDate: 1 });
 deadlineSchema.index({ project: 1 });
 deadlineSchema.index({ createdBy: 1 });

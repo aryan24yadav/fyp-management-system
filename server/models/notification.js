@@ -46,8 +46,10 @@ const notificationSchema = new mongoose.Schema(
   },
 );
 
-// Indexing foe better query performance
+// Indexes for better query performance
 notificationSchema.index({ user: 1, isRead: 1 });
+notificationSchema.index({ user: 1, createdAt: -1 });
+notificationSchema.index({ type: 1, createdAt: -1 });
 
 export const Notification =
   mongoose.models.Notification ||
